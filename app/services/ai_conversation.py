@@ -1,0 +1,552 @@
+import logging
+import asyncio
+import json
+import base64
+import aiohttp
+from typing import Dict, Any, Optional, List, AsyncGenerator
+from datetime import datetime
+import io
+from dataclasses import dataclass
+from enum import Enum
+import anthropic
+from deepgram import Deepgram
+from elevenlabs import ElevenLabs
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+
+from app.config import settings
+from app.database import get_db
+from app.models import Campaign, Lead, CallLog, ConversationLog
+
+logger = logging.getLogger(__name__)
+
+class ConversationState(Enum):
+    GREETING = "greeting"
+    QUALIFICATION = "qualification"
+    PRESENTATION = "presentation"
+    OBJECTION_HANDLING = "objection_handling"
+    CLOSING = "closing"
+    TRANSFER = "transfer"
+    COMPLETED = "completed"
+
+@dataclass
+class ConversationContext:
+    call_log_id: int
+    campaign_id: int
+    lead_id: int
+    state: ConversationState
+    conversation_history: List[Dict[str, str]]
+    lead_responses: List[str]
+    qualified: bool = False
+    transfer_requested: bool = False
+    objections_count: int = 0
+    sentiment_score: float = 0.0
+    
+class AIConversationEngine:
+    def __init__(self):
+        self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        self.deepgram_client = Deepgram(settings.DEEPGRAM_API_KEY)
+        self.elevenlabs_client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+        self.active_conversations: Dict[int, ConversationContext] = {}
+        
+    async def start_conversation(self, call_log_id: int) -> ConversationContext:
+        """Initialize a new AI conversation"""
+        try:
+            async with get_db() as db:
+                # Get call log and related data
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if not call_log:
+                    raise ValueError(f"Call log {call_log_id} not found")
+                
+                # Get campaign and lead info
+                campaign_query = select(Campaign).where(Campaign.id == call_log.campaign_id)
+                campaign = await db.execute(campaign_query)
+                campaign = campaign.scalar_one_or_none()
+                
+                lead_query = select(Lead).where(Lead.id == call_log.lead_id)
+                lead = await db.execute(lead_query)
+                lead = lead.scalar_one_or_none()
+                
+                # Create conversation context
+                context = ConversationContext(
+                    call_log_id=call_log_id,
+                    campaign_id=call_log.campaign_id,
+                    lead_id=call_log.lead_id,
+                    state=ConversationState.GREETING,
+                    conversation_history=[],
+                    lead_responses=[]
+                )
+                
+                self.active_conversations[call_log_id] = context
+                
+                # Generate initial greeting
+                initial_greeting = await self._generate_initial_greeting(campaign, lead)
+                context.conversation_history.append({
+                    "role": "assistant",
+                    "content": initial_greeting,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                
+                logger.info(f"Started AI conversation for call {call_log_id}")
+                return context
+                
+        except Exception as e:
+            logger.error(f"Error starting conversation: {e}")
+            raise
+    
+    async def process_audio_chunk(self, call_log_id: int, audio_data: bytes) -> Optional[bytes]:
+        """Process incoming audio chunk and generate response"""
+        try:
+            if call_log_id not in self.active_conversations:
+                logger.warning(f"No active conversation for call {call_log_id}")
+                return None
+                
+            context = self.active_conversations[call_log_id]
+            
+            # Transcribe audio using Deepgram
+            transcript = await self._transcribe_audio(audio_data)
+            
+            if not transcript or len(transcript.strip()) < 3:
+                return None  # No meaningful speech detected
+                
+            # Add to conversation history
+            context.lead_responses.append(transcript)
+            context.conversation_history.append({
+                "role": "user",
+                "content": transcript,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            
+            # Generate AI response
+            ai_response = await self._generate_ai_response(context, transcript)
+            
+            if ai_response:
+                # Add AI response to history
+                context.conversation_history.append({
+                    "role": "assistant",
+                    "content": ai_response,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                
+                # Convert to speech
+                audio_response = await self._text_to_speech(ai_response)
+                
+                # Log the conversation
+                await self._log_conversation_turn(call_log_id, transcript, ai_response)
+                
+                return audio_response
+                
+        except Exception as e:
+            logger.error(f"Error processing audio chunk: {e}")
+            return None
+    
+    async def _transcribe_audio(self, audio_data: bytes) -> Optional[str]:
+        """Transcribe audio using Deepgram"""
+        try:
+            # Configure Deepgram options
+            options = {
+                'model': 'nova-2',
+                'language': 'en-US',
+                'punctuate': True,
+                'diarize': False,
+                'utterances': True,
+                'interim_results': False
+            }
+            
+            # Create audio source
+            audio_source = {
+                'buffer': audio_data,
+                'mimetype': 'audio/mulaw'
+            }
+            
+            # Transcribe
+            response = await self.deepgram_client.transcription.prerecorded(
+                audio_source, options
+            )
+            
+            if response and 'results' in response:
+                channels = response['results']['channels']
+                if channels and len(channels) > 0:
+                    alternatives = channels[0]['alternatives']
+                    if alternatives and len(alternatives) > 0:
+                        transcript = alternatives[0]['transcript']
+                        confidence = alternatives[0]['confidence']
+                        
+                        # Only return if confidence is high enough
+                        if confidence > 0.7:
+                            return transcript.strip()
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error transcribing audio: {e}")
+            return None
+    
+    async def _generate_ai_response(self, context: ConversationContext, user_input: str) -> Optional[str]:
+        """Generate AI response using Claude"""
+        try:
+            # Get campaign and lead data for context
+            async with get_db() as db:
+                campaign_query = select(Campaign).where(Campaign.id == context.campaign_id)
+                campaign = await db.execute(campaign_query)
+                campaign = campaign.scalar_one_or_none()
+                
+                lead_query = select(Lead).where(Lead.id == context.lead_id)
+                lead = await db.execute(lead_query)
+                lead = lead.scalar_one_or_none()
+                
+            # Build conversation context
+            conversation_context = self._build_conversation_context(context, campaign, lead)
+            
+            # Analyze sentiment and conversation state
+            await self._analyze_conversation_state(context, user_input)
+            
+            # Generate response based on current state
+            response = await self._generate_contextual_response(
+                context, user_input, conversation_context
+            )
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error generating AI response: {e}")
+            return None
+    
+    async def _generate_contextual_response(self, context: ConversationContext, 
+                                          user_input: str, conversation_context: str) -> str:
+        """Generate response based on conversation state"""
+        try:
+            # Build prompt based on current state
+            if context.state == ConversationState.GREETING:
+                prompt = self._build_greeting_prompt(context, user_input, conversation_context)
+            elif context.state == ConversationState.QUALIFICATION:
+                prompt = self._build_qualification_prompt(context, user_input, conversation_context)
+            elif context.state == ConversationState.PRESENTATION:
+                prompt = self._build_presentation_prompt(context, user_input, conversation_context)
+            elif context.state == ConversationState.OBJECTION_HANDLING:
+                prompt = self._build_objection_handling_prompt(context, user_input, conversation_context)
+            elif context.state == ConversationState.CLOSING:
+                prompt = self._build_closing_prompt(context, user_input, conversation_context)
+            else:
+                prompt = self._build_default_prompt(context, user_input, conversation_context)
+            
+            # Generate response using Claude
+            response = await self.anthropic_client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=200,
+                temperature=0.7,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            
+            ai_response = response.content[0].text.strip()
+            
+            # Update conversation state based on response
+            self._update_conversation_state(context, user_input, ai_response)
+            
+            return ai_response
+            
+        except Exception as e:
+            logger.error(f"Error generating contextual response: {e}")
+            return "I apologize, but I'm having trouble processing that. Could you please repeat?"
+    
+    def _build_greeting_prompt(self, context: ConversationContext, user_input: str, conversation_context: str) -> str:
+        """Build prompt for greeting phase"""
+        return f"""
+{settings.CLAUDE_SYSTEM_PROMPT}
+
+{conversation_context}
+
+Current conversation state: GREETING
+User just said: "{user_input}"
+
+Your task is to:
+1. Acknowledge their response warmly
+2. Briefly introduce yourself and the purpose of your call
+3. Begin light qualification by asking about their current situation
+4. Keep response under 30 words
+5. Sound natural and conversational
+
+Generate your response:"""
+    
+    def _build_qualification_prompt(self, context: ConversationContext, user_input: str, conversation_context: str) -> str:
+        """Build prompt for qualification phase"""
+        return f"""
+{settings.CLAUDE_SYSTEM_PROMPT}
+
+{conversation_context}
+
+Current conversation state: QUALIFICATION
+User just said: "{user_input}"
+
+Your task is to:
+1. Ask qualifying questions to understand their needs
+2. Listen for buying signals or pain points
+3. Determine if they're a good fit for the product/service
+4. Keep response under 35 words
+5. Ask open-ended questions
+
+Generate your response:"""
+    
+    def _build_presentation_prompt(self, context: ConversationContext, user_input: str, conversation_context: str) -> str:
+        """Build prompt for presentation phase"""
+        return f"""
+{settings.CLAUDE_SYSTEM_PROMPT}
+
+{conversation_context}
+
+Current conversation state: PRESENTATION
+User just said: "{user_input}"
+
+Your task is to:
+1. Present relevant benefits based on their qualification
+2. Use specific examples and social proof
+3. Address their particular situation
+4. Keep response under 40 words
+5. Make it conversational, not salesy
+
+Generate your response:"""
+    
+    def _build_objection_handling_prompt(self, context: ConversationContext, user_input: str, conversation_context: str) -> str:
+        """Build prompt for objection handling phase"""
+        return f"""
+{settings.CLAUDE_SYSTEM_PROMPT}
+
+{conversation_context}
+
+Current conversation state: OBJECTION_HANDLING
+User just said: "{user_input}"
+
+Your task is to:
+1. Acknowledge their concern with empathy
+2. Provide a brief, relevant response to their objection
+3. Ask a follow-up question to keep engagement
+4. Keep response under 35 words
+5. Don't be pushy - be understanding
+
+Generate your response:"""
+    
+    def _build_closing_prompt(self, context: ConversationContext, user_input: str, conversation_context: str) -> str:
+        """Build prompt for closing phase"""
+        return f"""
+{settings.CLAUDE_SYSTEM_PROMPT}
+
+{conversation_context}
+
+Current conversation state: CLOSING
+User just said: "{user_input}"
+
+Your task is to:
+1. Summarize key benefits they showed interest in
+2. Suggest next steps (transfer to specialist, schedule appointment, etc.)
+3. Create urgency if appropriate
+4. Keep response under 30 words
+5. Be direct but not aggressive
+
+Generate your response:"""
+    
+    def _build_default_prompt(self, context: ConversationContext, user_input: str, conversation_context: str) -> str:
+        """Build default prompt"""
+        return f"""
+{settings.CLAUDE_SYSTEM_PROMPT}
+
+{conversation_context}
+
+User just said: "{user_input}"
+
+Respond naturally and helpfully while trying to guide the conversation toward a positive outcome. Keep response under 30 words.
+
+Generate your response:"""
+    
+    def _build_conversation_context(self, context: ConversationContext, campaign: Any, lead: Any) -> str:
+        """Build context for Claude"""
+        return f"""
+Campaign: {campaign.name}
+Lead: {lead.first_name} {lead.last_name}
+Phone: {lead.phone_number}
+Lead Score: {lead.lead_score}
+Previous Conversations: {len(context.conversation_history)}
+Qualified: {context.qualified}
+Objections Count: {context.objections_count}
+Sentiment Score: {context.sentiment_score}
+"""
+    
+    async def _analyze_conversation_state(self, context: ConversationContext, user_input: str):
+        """Analyze conversation state and sentiment"""
+        try:
+            # Simple sentiment analysis based on keywords
+            positive_words = ['yes', 'interested', 'good', 'great', 'sure', 'okay', 'sounds', 'tell']
+            negative_words = ['no', 'not', 'busy', 'interested', 'time', 'remove', 'stop', 'don\'t']
+            
+            user_lower = user_input.lower()
+            
+            positive_score = sum(1 for word in positive_words if word in user_lower)
+            negative_score = sum(1 for word in negative_words if word in user_lower)
+            
+            # Update sentiment score
+            if positive_score > negative_score:
+                context.sentiment_score = min(1.0, context.sentiment_score + 0.1)
+            elif negative_score > positive_score:
+                context.sentiment_score = max(-1.0, context.sentiment_score - 0.1)
+            
+            # Check for objections
+            objection_keywords = ['no', 'not interested', 'busy', 'not now', 'remove', 'stop calling']
+            if any(keyword in user_lower for keyword in objection_keywords):
+                context.objections_count += 1
+                context.state = ConversationState.OBJECTION_HANDLING
+            
+            # Check for transfer requests
+            transfer_keywords = ['speak to', 'talk to', 'transfer', 'manager', 'supervisor', 'human']
+            if any(keyword in user_lower for keyword in transfer_keywords):
+                context.transfer_requested = True
+                context.state = ConversationState.TRANSFER
+            
+            # Check for qualification
+            if context.state == ConversationState.GREETING and len(context.conversation_history) > 2:
+                context.state = ConversationState.QUALIFICATION
+            elif context.state == ConversationState.QUALIFICATION and context.sentiment_score > 0.3:
+                context.qualified = True
+                context.state = ConversationState.PRESENTATION
+            elif context.state == ConversationState.PRESENTATION and len(context.conversation_history) > 8:
+                context.state = ConversationState.CLOSING
+                
+        except Exception as e:
+            logger.error(f"Error analyzing conversation state: {e}")
+    
+    def _update_conversation_state(self, context: ConversationContext, user_input: str, ai_response: str):
+        """Update conversation state based on response"""
+        try:
+            # Check if AI is asking for transfer
+            if 'transfer' in ai_response.lower() or 'specialist' in ai_response.lower():
+                context.transfer_requested = True
+                context.state = ConversationState.TRANSFER
+            
+            # Check if conversation should end
+            if 'goodbye' in ai_response.lower() or 'thank you' in ai_response.lower():
+                context.state = ConversationState.COMPLETED
+                
+        except Exception as e:
+            logger.error(f"Error updating conversation state: {e}")
+    
+    async def _text_to_speech(self, text: str) -> bytes:
+        """Convert text to speech using ElevenLabs"""
+        try:
+            # Use ElevenLabs API
+            response = await self.elevenlabs_client.generate(
+                text=text,
+                voice=settings.ELEVENLABS_VOICE_ID,
+                model="eleven_turbo_v2"
+            )
+            
+            # Convert to audio bytes
+            audio_bytes = b""
+            for chunk in response:
+                audio_bytes += chunk
+                
+            return audio_bytes
+            
+        except Exception as e:
+            logger.error(f"Error converting text to speech: {e}")
+            # Return empty audio on error
+            return b""
+    
+    async def _generate_initial_greeting(self, campaign: Any, lead: Any) -> str:
+        """Generate initial greeting for the call"""
+        try:
+            greeting_templates = [
+                f"Hi {lead.first_name}, this is Sarah calling about {campaign.name}. How are you doing today?",
+                f"Hello {lead.first_name}, this is Sarah. I'm calling regarding {campaign.name}. Do you have a quick moment?",
+                f"Hi {lead.first_name}, Sarah here about {campaign.name}. Hope you're having a good day!"
+            ]
+            
+            # Simple selection based on lead score
+            if lead.lead_score > 80:
+                return greeting_templates[0]
+            elif lead.lead_score > 60:
+                return greeting_templates[1]
+            else:
+                return greeting_templates[2]
+                
+        except Exception as e:
+            logger.error(f"Error generating initial greeting: {e}")
+            return "Hi, this is Sarah. How are you doing today?"
+    
+    async def _log_conversation_turn(self, call_log_id: int, user_input: str, ai_response: str):
+        """Log conversation turn to database"""
+        try:
+            async with get_db() as db:
+                conversation_log = ConversationLog(
+                    call_log_id=call_log_id,
+                    user_input=user_input,
+                    ai_response=ai_response,
+                    timestamp=datetime.utcnow()
+                )
+                db.add(conversation_log)
+                await db.commit()
+                
+        except Exception as e:
+            logger.error(f"Error logging conversation turn: {e}")
+    
+    async def end_conversation(self, call_log_id: int) -> Dict[str, Any]:
+        """End AI conversation and clean up"""
+        try:
+            if call_log_id in self.active_conversations:
+                context = self.active_conversations[call_log_id]
+                
+                # Generate conversation summary
+                summary = {
+                    'call_log_id': call_log_id,
+                    'total_turns': len(context.conversation_history),
+                    'qualified': context.qualified,
+                    'transfer_requested': context.transfer_requested,
+                    'objections_count': context.objections_count,
+                    'final_sentiment_score': context.sentiment_score,
+                    'final_state': context.state.value
+                }
+                
+                # Update call log with conversation summary
+                async with get_db() as db:
+                    update_query = update(CallLog).where(CallLog.id == call_log_id).values(
+                        qualified=context.qualified,
+                        transfer_requested=context.transfer_requested,
+                        objections_count=context.objections_count,
+                        sentiment_score=context.sentiment_score,
+                        conversation_summary=json.dumps(summary)
+                    )
+                    await db.execute(update_query)
+                    await db.commit()
+                
+                # Clean up
+                del self.active_conversations[call_log_id]
+                
+                logger.info(f"Ended AI conversation for call {call_log_id}")
+                return summary
+                
+        except Exception as e:
+            logger.error(f"Error ending conversation: {e}")
+            return {}
+    
+    def get_conversation_context(self, call_log_id: int) -> Optional[ConversationContext]:
+        """Get current conversation context"""
+        return self.active_conversations.get(call_log_id)
+    
+    async def should_transfer_call(self, call_log_id: int) -> bool:
+        """Check if call should be transferred to human"""
+        if call_log_id not in self.active_conversations:
+            return False
+            
+        context = self.active_conversations[call_log_id]
+        
+        # Transfer conditions
+        return (
+            context.transfer_requested or
+            (context.qualified and context.sentiment_score > 0.5) or
+            (context.objections_count > 2 and context.sentiment_score > 0.0)
+        )
+
+# Global instance
+ai_conversation_engine = AIConversationEngine() 

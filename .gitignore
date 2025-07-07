@@ -1,0 +1,140 @@
+# Environment files
+.env
+.env.local
+.env.production
+.env.backup.*
+
+# API Keys and secrets
+*.key
+*.pem
+secrets/
+config/production.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.virtualenv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Database
+*.db
+*.sqlite3
+*.sqlite
+postgres_data/
+redis_data/
+
+# Logs
+logs/
+*.log
+log_*
+test_report.json
+
+# Audio files (can be large)
+*.wav
+*.mp3
+*.m4a
+*.aac
+audio_cache/
+recordings/
+
+# Docker
+.dockerignore
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+.coverage.*
+htmlcov/
+.cache
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Backup files
+*.backup
+*.bak
+backup_*
+
+# AI model files (if any)
+models/
+*.model
+*.pkl
+
+# Generated documentation
+docs/_build/
+
+# SSL certificates
+*.crt
+*.csr
+
+# Monitoring data
+prometheus_data/
+grafana_data/
+
+# Local development overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Node modules (if using any frontend tools)
+node_modules/
+
+# Terraform (if using for infrastructure)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Kubernetes secrets
+*.yaml.secret
+secrets.yaml
+
+# Local configuration overrides
+config.local.py
+settings_local.py 
