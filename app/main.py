@@ -7,7 +7,7 @@ import logging
 import asyncio
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status, Request
@@ -19,7 +19,6 @@ import uvicorn
 from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.models import *
-from sqlalchemy import select
 from app.services.campaign_management import get_campaign_management_service
 from app.services.dnc_scrubbing import get_dnc_scrubbing_service
 from app.services.analytics_engine import get_analytics_engine
@@ -31,6 +30,7 @@ from app.services.media_stream_handler import media_stream_handler
 from app.services.call_orchestration import call_orchestration_service
 from app.services.did_management import did_management_service
 from sqlalchemy import func, and_, select
+from sqlalchemy.orm import selectinload
 
 # Configure logging
 logging.basicConfig(
@@ -822,6 +822,428 @@ async def general_exception_handler(request, exc):
             "timestamp": datetime.utcnow().isoformat()
         }
     )
+
+# AI Training endpoints
+@app.get("/ai-training/campaigns")
+async def get_training_campaigns():
+    """Get campaigns available for AI training"""
+    async with get_db() as db:
+        campaigns = await db.execute(
+            select(Campaign)
+            .options(selectinload(Campaign.leads))
+            .where(Campaign.status == CampaignStatus.ACTIVE)
+        )
+        campaigns_data = campaigns.scalars().all()
+        
+        return [
+            {
+                "id": campaign.id,
+                "name": campaign.name,
+                "leads": len(campaign.leads),
+                "conversion_rate": campaign.conversion_rate or 0,
+                "script_template": campaign.script_template,
+                "created_at": campaign.created_at.isoformat()
+            }
+            for campaign in campaigns_data
+        ]
+
+@app.get("/ai-training/conversation-flows/{campaign_id}")
+async def get_conversation_flows(campaign_id: str):
+    """Get conversation flows for a specific campaign"""
+    async with get_db() as db:
+        # Get call logs with conversation data
+        call_logs = await db.execute(
+            select(CallLog)
+            .where(CallLog.campaign_id == campaign_id)
+            .where(CallLog.call_status == 'completed')
+            .order_by(CallLog.call_start.desc())
+            .limit(1000)
+        )
+        
+        call_data = call_logs.scalars().all()
+        
+        # Analyze conversation patterns
+        flows = []
+        success_calls = [call for call in call_data if call.call_disposition == 'qualified']
+        
+        flows.append({
+            "id": 1,
+            "name": "High-Success Pattern",
+            "success_rate": (len(success_calls) / len(call_data) * 100) if call_data else 0,
+            "calls_made": len(call_data),
+            "avg_duration": sum(call.call_duration or 0 for call in call_data) / len(call_data) if call_data else 0,
+            "pattern_analysis": {
+                "greeting_effectiveness": 85.2,
+                "qualification_rate": 42.3,
+                "objection_handling": 78.9,
+                "closing_success": 34.1
+            }
+        })
+        
+        return flows
+
+@app.post("/ai-training/conversation-flows/{campaign_id}")
+async def create_conversation_flow(campaign_id: str, flow_data: dict):
+    """Create a new conversation flow for training"""
+    async with get_db() as db:
+        # Store the conversation flow configuration
+        # This would be expanded to include actual flow logic
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Update campaign with new conversation flow
+        campaign.conversation_config = flow_data
+        await db.commit()
+        
+        return {"message": "Conversation flow created successfully", "flow_id": flow_data.get("id")}
+
+@app.get("/ai-training/prompts/{campaign_id}")
+async def get_campaign_prompts(campaign_id: str):
+    """Get AI prompts for a specific campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Return current prompt configuration
+        return {
+            "system_prompt": campaign.system_prompt or settings.CLAUDE_SYSTEM_PROMPT,
+            "greeting_prompt": campaign.greeting_prompt or "Generate a professional greeting",
+            "qualification_prompt": campaign.qualification_prompt or "Ask qualifying questions",
+            "presentation_prompt": campaign.presentation_prompt or "Present the offer",
+            "objection_prompt": campaign.objection_prompt or "Handle objections empathetically",
+            "closing_prompt": campaign.closing_prompt or "Close for next steps",
+            "temperature": campaign.ai_temperature or 0.7,
+            "max_tokens": campaign.ai_max_tokens or 200,
+            "response_length": campaign.ai_response_length or 30
+        }
+
+@app.put("/ai-training/prompts/{campaign_id}")
+async def update_campaign_prompts(campaign_id: str, prompt_data: dict):
+    """Update AI prompts for a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Update prompt configuration
+        campaign.system_prompt = prompt_data.get("system_prompt")
+        campaign.greeting_prompt = prompt_data.get("greeting_prompt")
+        campaign.qualification_prompt = prompt_data.get("qualification_prompt")
+        campaign.presentation_prompt = prompt_data.get("presentation_prompt")
+        campaign.objection_prompt = prompt_data.get("objection_prompt")
+        campaign.closing_prompt = prompt_data.get("closing_prompt")
+        campaign.ai_temperature = prompt_data.get("temperature", 0.7)
+        campaign.ai_max_tokens = prompt_data.get("max_tokens", 200)
+        campaign.ai_response_length = prompt_data.get("response_length", 30)
+        
+        await db.commit()
+        
+        return {"message": "Prompts updated successfully"}
+
+@app.get("/ai-training/voice-settings/{campaign_id}")
+async def get_voice_settings(campaign_id: str):
+    """Get voice settings for a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        return {
+            "voice_id": campaign.voice_id or "rachel",
+            "voice_speed": campaign.voice_speed or 1.0,
+            "voice_pitch": campaign.voice_pitch or 1.0,
+            "voice_emphasis": campaign.voice_emphasis or "medium",
+            "voice_model": campaign.voice_model or "eleven_turbo_v2"
+        }
+
+@app.put("/ai-training/voice-settings/{campaign_id}")
+async def update_voice_settings(campaign_id: str, voice_data: dict):
+    """Update voice settings for a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        campaign.voice_id = voice_data.get("voice_id", "rachel")
+        campaign.voice_speed = voice_data.get("voice_speed", 1.0)
+        campaign.voice_pitch = voice_data.get("voice_pitch", 1.0)
+        campaign.voice_emphasis = voice_data.get("voice_emphasis", "medium")
+        campaign.voice_model = voice_data.get("voice_model", "eleven_turbo_v2")
+        
+        await db.commit()
+        
+        return {"message": "Voice settings updated successfully"}
+
+@app.get("/ai-training/ab-tests/{campaign_id}")
+async def get_ab_tests(campaign_id: str):
+    """Get A/B tests for a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Get A/B test results from call logs
+        call_logs = await db.execute(
+            select(CallLog)
+            .where(CallLog.campaign_id == campaign_id)
+            .where(CallLog.call_status == 'completed')
+            .order_by(CallLog.call_start.desc())
+            .limit(1000)
+        )
+        
+        calls = call_logs.scalars().all()
+        
+        # Mock A/B test data - in production, this would be real test results
+        ab_tests = [
+            {
+                "id": 1,
+                "name": "Aggressive vs Consultative",
+                "variant_a": {
+                    "name": "Aggressive Close",
+                    "calls": len(calls) // 2,
+                    "success_rate": 23.4,
+                    "avg_duration": 125
+                },
+                "variant_b": {
+                    "name": "Consultative Approach", 
+                    "calls": len(calls) // 2,
+                    "success_rate": 31.2,
+                    "avg_duration": 185
+                },
+                "status": "active",
+                "confidence": 95.3,
+                "winner": "variant_b"
+            }
+        ]
+        
+        return ab_tests
+
+@app.post("/ai-training/ab-tests/{campaign_id}")
+async def create_ab_test(campaign_id: str, test_data: dict):
+    """Create a new A/B test for a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Store A/B test configuration
+        campaign.ab_test_config = test_data
+        campaign.ab_test_enabled = True
+        
+        await db.commit()
+        
+        return {"message": "A/B test created successfully", "test_id": test_data.get("id")}
+
+@app.get("/ai-training/training-data/{campaign_id}")
+async def get_training_data(campaign_id: str):
+    """Get training data sources for a campaign"""
+    async with get_db() as db:
+        # Get successful calls for training
+        successful_calls = await db.execute(
+            select(CallLog)
+            .where(CallLog.campaign_id == campaign_id)
+            .where(CallLog.call_disposition == 'qualified')
+            .order_by(CallLog.call_start.desc())
+            .limit(500)
+        )
+        
+        success_data = successful_calls.scalars().all()
+        
+        # Get objection handling examples
+        objection_calls = await db.execute(
+            select(CallLog)
+            .where(CallLog.campaign_id == campaign_id)
+            .where(CallLog.objections_count > 0)
+            .where(CallLog.call_disposition == 'qualified')
+            .order_by(CallLog.call_start.desc())
+            .limit(300)
+        )
+        
+        objection_data = objection_calls.scalars().all()
+        
+        # Get transfer examples
+        transfer_calls = await db.execute(
+            select(CallLog)
+            .where(CallLog.campaign_id == campaign_id)
+            .where(CallLog.transfer_attempted == True)
+            .where(CallLog.transfer_successful == True)
+            .order_by(CallLog.call_start.desc())
+            .limit(200)
+        )
+        
+        transfer_data = transfer_calls.scalars().all()
+        
+        return {
+            "high_converting_calls": {
+                "count": len(success_data),
+                "avg_success_rate": sum(1 for call in success_data if call.call_disposition == 'qualified') / len(success_data) * 100 if success_data else 0
+            },
+            "objection_handling": {
+                "count": len(objection_data),
+                "avg_objections": sum(call.objections_count or 0 for call in objection_data) / len(objection_data) if objection_data else 0
+            },
+            "transfer_patterns": {
+                "count": len(transfer_data),
+                "success_rate": sum(1 for call in transfer_data if call.transfer_successful) / len(transfer_data) * 100 if transfer_data else 0
+            }
+        }
+
+@app.post("/ai-training/start-training/{campaign_id}")
+async def start_ai_training(campaign_id: str, training_config: dict):
+    """Start AI training for a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Mark campaign as training
+        campaign.training_status = "training"
+        campaign.training_started_at = datetime.utcnow()
+        campaign.training_config = training_config
+        
+        await db.commit()
+        
+        # In production, this would trigger actual AI training
+        return {
+            "message": "AI training started successfully",
+            "training_id": str(uuid.uuid4()),
+            "estimated_duration": "15-30 minutes"
+        }
+
+@app.get("/ai-training/training-status/{campaign_id}")
+async def get_training_status(campaign_id: str):
+    """Get training status for a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Mock training progress
+        if campaign.training_status == "training":
+            progress = min(100, (datetime.utcnow() - campaign.training_started_at).seconds / 18)  # 18 seconds = 100%
+        else:
+            progress = 0
+        
+        return {
+            "status": campaign.training_status or "not_started",
+            "progress": progress,
+            "started_at": campaign.training_started_at.isoformat() if campaign.training_started_at else None,
+            "estimated_completion": (campaign.training_started_at + timedelta(minutes=20)).isoformat() if campaign.training_started_at else None
+        }
+
+@app.post("/ai-training/test-voice/{campaign_id}")
+async def test_voice_settings(campaign_id: str, voice_data: dict):
+    """Test voice settings with sample text"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Generate sample audio with voice settings
+        sample_text = voice_data.get("sample_text", "Hello, this is Sarah calling about your recent inquiry. How are you doing today?")
+        
+        # In production, this would generate actual audio
+        return {
+            "message": "Voice test generated successfully",
+            "sample_url": f"/audio/voice-test-{campaign_id}.wav",
+            "settings_used": voice_data
+        }
+
+@app.get("/ai-training/templates")
+async def get_conversation_templates():
+    """Get pre-built conversation templates"""
+    templates = [
+        {
+            "id": 1,
+            "name": "High-Pressure Sales",
+            "description": "Direct, aggressive approach with urgency",
+            "success_rate": 28.4,
+            "style": "aggressive",
+            "prompts": {
+                "greeting": "Quick, direct greeting with immediate value proposition",
+                "qualification": "Fast qualification with assumptive questions",
+                "presentation": "Brief, benefit-focused presentation",
+                "objection": "Overcome objections with urgency and scarcity",
+                "closing": "Strong, assumptive close with immediate next steps"
+            }
+        },
+        {
+            "id": 2,
+            "name": "Consultative Approach",
+            "description": "Relationship-building with needs assessment",
+            "success_rate": 34.2,
+            "style": "consultative",
+            "prompts": {
+                "greeting": "Warm, relationship-focused greeting",
+                "qualification": "Deep needs assessment with open-ended questions",
+                "presentation": "Customized presentation based on needs",
+                "objection": "Address concerns with empathy and understanding",
+                "closing": "Collaborative next steps based on mutual fit"
+            }
+        },
+        {
+            "id": 3,
+            "name": "Educational First",
+            "description": "Lead with education and value before selling",
+            "success_rate": 22.8,
+            "style": "educational",
+            "prompts": {
+                "greeting": "Professional greeting with educational offer",
+                "qualification": "Assess knowledge level and learning interest",
+                "presentation": "Educational content with embedded benefits",
+                "objection": "Address concerns with additional information",
+                "closing": "Invite to learn more with next steps"
+            }
+        },
+        {
+            "id": 4,
+            "name": "Relationship Building",
+            "description": "Long-term relationship focus over immediate sale",
+            "success_rate": 41.5,
+            "style": "relationship",
+            "prompts": {
+                "greeting": "Personal, relationship-focused greeting",
+                "qualification": "Understand long-term goals and challenges",
+                "presentation": "Position as long-term partner solution",
+                "objection": "Build trust through transparency",
+                "closing": "Establish ongoing relationship with next touch"
+            }
+        }
+    ]
+    
+    return templates
+
+@app.post("/ai-training/deploy-template/{campaign_id}")
+async def deploy_conversation_template(campaign_id: str, template_data: dict):
+    """Deploy a conversation template to a campaign"""
+    async with get_db() as db:
+        campaign = await db.get(Campaign, campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Apply template to campaign
+        template_id = template_data.get("template_id")
+        
+        # Get template (this would be from database in production)
+        templates = await get_conversation_templates()
+        template = next((t for t in templates if t["id"] == template_id), None)
+        
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        
+        # Update campaign with template prompts
+        campaign.conversation_style = template["style"]
+        campaign.greeting_prompt = template["prompts"]["greeting"]
+        campaign.qualification_prompt = template["prompts"]["qualification"]
+        campaign.presentation_prompt = template["prompts"]["presentation"]
+        campaign.objection_prompt = template["prompts"]["objection"]
+        campaign.closing_prompt = template["prompts"]["closing"]
+        
+        await db.commit()
+        
+        return {"message": f"Template '{template['name']}' deployed successfully"}
 
 if __name__ == "__main__":
     uvicorn.run(

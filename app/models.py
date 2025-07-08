@@ -77,6 +77,37 @@ class Campaign(Base):
     greeting_message = Column(Text)
     objection_responses = Column(ARRAY(Text))
     
+    # AI Training Configuration
+    system_prompt = Column(Text)
+    greeting_prompt = Column(Text)
+    qualification_prompt = Column(Text)
+    presentation_prompt = Column(Text)
+    objection_prompt = Column(Text)
+    closing_prompt = Column(Text)
+    ai_temperature = Column(Float, default=0.7)
+    ai_max_tokens = Column(Integer, default=200)
+    ai_response_length = Column(Integer, default=30)
+    
+    # Voice Configuration
+    voice_id = Column(String(50), default="rachel")
+    voice_speed = Column(Float, default=1.0)
+    voice_pitch = Column(Float, default=1.0)
+    voice_emphasis = Column(String(20), default="medium")
+    voice_model = Column(String(50), default="eleven_turbo_v2")
+    
+    # Conversation Configuration
+    conversation_style = Column(String(50), default="consultative")
+    conversation_config = Column(JSON)
+    objections_before_transfer = Column(Integer, default=3)
+    
+    # Training Status
+    training_status = Column(String(20), default="not_started")
+    training_started_at = Column(DateTime)
+    training_config = Column(JSON)
+    
+    # A/B Testing Configuration
+    ab_test_config = Column(JSON)
+    
     # Campaign Settings
     max_daily_budget = Column(Float, default=1000.0)
     cost_per_minute_limit = Column(Float, default=0.025)
@@ -94,6 +125,7 @@ class Campaign(Base):
     leads_contacted = Column(Integer, default=0)
     leads_qualified = Column(Integer, default=0)
     total_cost = Column(Float, default=0.0)
+    conversion_rate = Column(Float, default=0.0)
     
     # A/B Testing
     ab_test_enabled = Column(Boolean, default=False)
@@ -121,6 +153,7 @@ class Lead(Base):
     last_name = Column(String(100))
     email = Column(String(255))
     phone = Column(String(20), nullable=False)
+    phone_number = Column(String(20))  # Alias for phone
     company = Column(String(255))
     title = Column(String(100))
     
@@ -133,6 +166,7 @@ class Lead(Base):
     # Lead Status & Scoring
     status = Column(Enum(LeadStatus), default=LeadStatus.NEW)
     score = Column(Float, default=0.0)
+    lead_score = Column(Float, default=0.0)  # Alias for score
     priority = Column(Integer, default=5)
     
     # Call History
@@ -236,8 +270,12 @@ class CallLog(Base):
     # Call Details
     from_number = Column(String(20))
     to_number = Column(String(20))
+    phone_number = Column(String(20))
     status = Column(Enum(CallStatus))
     disposition = Column(Enum(CallDisposition))
+    call_status = Column(String(50))
+    call_start = Column(DateTime)
+    call_answered = Column(DateTime)
     
     # Call Timing
     initiated_at = Column(DateTime)
@@ -257,12 +295,16 @@ class CallLog(Base):
     ai_confidence_score = Column(Float)
     conversation_turns = Column(Integer, default=0)
     transfer_requested = Column(Boolean, default=False)
+    objections_count = Column(Integer, default=0)
+    call_duration = Column(Integer, default=0)
+    call_disposition = Column(String(50))
     
     # Transfer Information
     transfer_attempted = Column(Boolean, default=False)
     transfer_number = Column(String(20))
     transfer_time = Column(DateTime)
     transfer_failed = Column(Boolean, default=False)
+    transfer_successful = Column(Boolean, default=False)
     transfer_failure_reason = Column(String(100))
     ai_disconnected_at = Column(DateTime)
     

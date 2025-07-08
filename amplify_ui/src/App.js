@@ -42,7 +42,8 @@ import {
   Star,
   Diamond,
   MonetizationOn,
-  Timeline
+  Timeline,
+  Psychology
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
@@ -51,6 +52,7 @@ import CallControlPanel from './components/CallControlPanel';
 import AnalyticsView from './components/AnalyticsView';
 import CostMonitoringView from './components/CostMonitoringView';
 import RealTimeCallMonitor from './components/RealTimeCallMonitor';
+import AITrainingView from './components/AITrainingView';
 import './App.css';
 
 // Luxury Theme - Money, Power, Opportunity
@@ -220,6 +222,7 @@ const sidebarItems = [
   { text: 'Dashboard', icon: <Dashboard />, view: 'dashboard' },
   { text: 'Call Control', icon: <Phone />, view: 'control' },
   { text: 'Analytics', icon: <Analytics />, view: 'analytics' },
+  { text: 'AI Training', icon: <Psychology />, view: 'training' },
   { text: 'Cost Monitor', icon: <AttachMoney />, view: 'costs' },
   { text: 'Live Calls', icon: <VolumeUp />, view: 'calls' },
   { text: 'Settings', icon: <Settings />, view: 'settings' }
@@ -262,6 +265,8 @@ function App() {
         return <CallControlPanel />;
       case 'analytics':
         return <AnalyticsView />;
+      case 'training':
+        return <AITrainingView />;
       case 'costs':
         return <CostMonitoringView />;
       case 'calls':
