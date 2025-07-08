@@ -746,7 +746,6 @@ class AnalyticsEngine:
         }
 
 # Async context manager for analytics engine
-async def get_analytics_engine():
+def get_analytics_engine():
     """Get analytics engine with proper session management."""
-    async with AnalyticsEngine() as engine:
-        yield engine 
+    return AnalyticsEngine() 

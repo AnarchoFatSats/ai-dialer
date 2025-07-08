@@ -44,16 +44,24 @@ check_requirements() {
         exit 1
     fi
     
-    if ! command -v terraform &> /dev/null; then
+    if ! command -v terraform &> /dev/null && ! [ -f "./terraform" ]; then
         print_error "Terraform not found. Please install it first:"
         echo "brew install terraform"
         exit 1
     fi
     
+    # Use local terraform if available
+    if [ -f "./terraform" ]; then
+        TERRAFORM_CMD="./terraform"
+    else
+        TERRAFORM_CMD="terraform"
+    fi
+    
     if ! command -v docker &> /dev/null; then
-        print_error "Docker not found. Please install it first:"
-        echo "brew install docker"
-        exit 1
+        print_warning "Docker not found. Will deploy infrastructure first, then configure container image."
+        DOCKER_AVAILABLE=false
+    else
+        DOCKER_AVAILABLE=true
     fi
     
     print_success "All requirements satisfied"
@@ -100,17 +108,17 @@ deploy_infrastructure() {
     print_status "Deploying infrastructure with Terraform..."
     
     # Initialize Terraform
-    terraform init
+    $TERRAFORM_CMD init
     
     # Plan deployment
-    terraform plan \
+    $TERRAFORM_CMD plan \
         -var="aws_region=$AWS_REGION" \
         -var="environment=$ENVIRONMENT" \
         -var="app_name=$APP_NAME" \
         -out=tfplan
     
     # Apply deployment
-    terraform apply tfplan
+    $TERRAFORM_CMD apply tfplan
     
     print_success "Infrastructure deployed successfully"
 }
@@ -146,19 +154,19 @@ get_deployment_info() {
     print_status "Getting deployment information..."
     
     # Get load balancer DNS
-    ALB_DNS=$(terraform output -raw load_balancer_dns)
+    ALB_DNS=$($TERRAFORM_CMD output -raw load_balancer_dns)
     
     # Get database endpoint
-    DB_ENDPOINT=$(terraform output -raw database_endpoint)
+    DB_ENDPOINT=$($TERRAFORM_CMD output -raw database_endpoint)
     
     # Get Redis endpoint
-    REDIS_ENDPOINT=$(terraform output -raw redis_endpoint)
+    REDIS_ENDPOINT=$($TERRAFORM_CMD output -raw redis_endpoint)
     
     # Get ECR repository URL
-    ECR_URL=$(terraform output -raw ecr_repository_url)
+    ECR_URL=$($TERRAFORM_CMD output -raw ecr_repository_url)
     
     # Get S3 bucket name
-    S3_BUCKET=$(terraform output -raw s3_bucket_name)
+    S3_BUCKET=$($TERRAFORM_CMD output -raw s3_bucket_name)
     
     echo ""
     echo "======================================="

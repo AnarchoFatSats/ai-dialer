@@ -640,7 +640,6 @@ class CostOptimizationEngine:
             }
 
 # Async context manager for cost optimization
-async def get_cost_optimization_engine():
+def get_cost_optimization_engine():
     """Get cost optimization engine with proper session management."""
-    async with CostOptimizationEngine() as engine:
-        yield engine 
+    return CostOptimizationEngine() 

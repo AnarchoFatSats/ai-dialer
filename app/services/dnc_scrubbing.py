@@ -503,7 +503,6 @@ class DNCScrubbingService:
             return 0
             
 # Async context manager for DNC scrubbing
-async def get_dnc_scrubbing_service():
+def get_dnc_scrubbing_service():
     """Get DNC scrubbing service with proper session management."""
-    async with DNCScrubbingService() as service:
-        yield service 
+    return DNCScrubbingService() 

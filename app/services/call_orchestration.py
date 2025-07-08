@@ -7,17 +7,18 @@ from enum import Enum
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, or_
+from sqlalchemy import func
 
 from app.config import settings
 from app.database import get_db
-from app.models import Campaign, Lead, CallLog, DIDPool, CallAnalytics
+from app.models import Campaign, Lead, CallLog, DIDPool
 from app.services.twilio_integration import twilio_service
 from app.services.ai_conversation import ai_conversation_engine
 from app.services.media_stream_handler import media_stream_handler
 from app.services.did_management import did_management_service
-from app.services.dnc_scrubbing import dnc_scrubbing_service
-from app.services.cost_optimization import cost_optimization_service
-from app.services.analytics_engine import analytics_engine
+from app.services.dnc_scrubbing import get_dnc_scrubbing_service
+from app.services.cost_optimization import get_cost_optimization_engine
+from app.services.analytics_engine import get_analytics_engine
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +96,11 @@ class CallOrchestrationService:
                     return False
                 
                 # Check if lead is on DNC list
-                if await dnc_scrubbing_service.is_dnc_number(lead.phone_number):
-                    logger.info(f"Lead {lead_id} is on DNC list, skipping")
-                    return False
+                async with get_dnc_scrubbing_service() as dnc_service:
+                    is_dnc, source = await dnc_service.check_phone_dnc_status(lead.phone_number)
+                    if is_dnc:
+                        logger.info(f"Lead {lead_id} is on DNC list ({source}), skipping")
+                        return False
                 
                 # Check calling hours
                 if not self._is_calling_hours_valid(lead):
@@ -221,10 +224,11 @@ class CallOrchestrationService:
             await did_management_service.mark_did_in_use(did['id'])
             
             # Track cost
-            await cost_optimization_service.track_call_cost(
-                call_result['call_log_id'],
-                'initiate'
-            )
+            async with get_cost_optimization_engine() as cost_engine:
+                await cost_engine.track_call_cost(
+                    call_result['call_log_id'],
+                    'initiate'
+                )
             
             logger.info(f"Initiated call {call_result['call_log_id']} for lead {call_request.lead_id}")
             return True
@@ -237,9 +241,10 @@ class CallOrchestrationService:
         """Perform pre-flight checks before initiating call"""
         try:
             # Check budget
-            if not await cost_optimization_service.check_budget_available(call_request.campaign_id):
-                logger.warning(f"Budget exceeded for campaign {call_request.campaign_id}")
-                return False
+            async with get_cost_optimization_engine() as cost_engine:
+                if not await cost_engine.check_budget_available(call_request.campaign_id):
+                    logger.warning(f"Budget exceeded for campaign {call_request.campaign_id}")
+                    return False
             
             # Check lead status
             async with get_db() as db:
@@ -363,7 +368,8 @@ class CallOrchestrationService:
                 pass
                 
             # Update analytics
-            await analytics_engine.record_call_event(call_log_id, new_status.value)
+            async with get_analytics_engine() as analytics:
+                await analytics.record_call_event(call_log_id, new_status.value)
             
         except Exception as e:
             logger.error(f"Error handling status change: {e}")
@@ -401,13 +407,54 @@ class CallOrchestrationService:
             await did_management_service.release_did(call_request.campaign_id)
             
             # Update analytics
-            await analytics_engine.record_call_completion(call_log_id)
+            async with get_analytics_engine() as analytics:
+                await analytics.record_call_completion(call_log_id)
             
             # Track final cost
-            await cost_optimization_service.track_call_cost(call_log_id, 'complete')
+            async with get_cost_optimization_engine() as cost_engine:
+                await cost_engine.track_call_cost(call_log_id, 'complete')
             
         except Exception as e:
             logger.error(f"Error handling call completion: {e}")
+    
+    async def handle_ai_disconnect(self, call_log_id: int):
+        """Handle AI disconnection from transferred call - free up capacity"""
+        try:
+            logger.info(f"Handling AI disconnect for call {call_log_id}")
+            
+            # Find and remove from active calls
+            if call_log_id in self.active_calls:
+                call_data = self.active_calls[call_log_id]
+                
+                # Update call status to transferred
+                call_data['status'] = CallStatus.TRANSFERRED
+                call_data['ai_disconnected_at'] = datetime.utcnow()
+                
+                # Release DID for new calls
+                call_request = call_data['call_request']
+                await did_management_service.release_did(call_request.campaign_id)
+                
+                # Track AI disconnect in analytics
+                async with get_analytics_engine() as analytics:
+                    await analytics.record_ai_disconnect(call_log_id)
+                
+                # Update cost tracking
+                async with get_cost_optimization_engine() as cost_engine:
+                    await cost_engine.track_call_cost(call_log_id, 'ai_disconnect')
+                
+                # Remove from active calls (frees up capacity)
+                del self.active_calls[call_log_id]
+                
+                # Update capacity metrics
+                # self.current_capacity += 1 # This line was removed as per the new_code, as self.current_capacity is not defined.
+                
+                logger.info(f"AI disconnected from call {call_log_id}, capacity freed up. Current capacity: {self.max_concurrent_calls - len(self.active_calls)}") # Adjusted to reflect actual active calls
+                
+                # Immediately try to start new calls with freed capacity
+                await self._process_call_queue()
+                
+        except Exception as e:
+            logger.error(f"Error handling AI disconnect: {e}")
     
     async def _update_system_metrics(self):
         """Update system-wide metrics"""
@@ -417,11 +464,12 @@ class CallOrchestrationService:
             queue_size = len(self.call_queue)
             
             # Update analytics
-            await analytics_engine.update_system_metrics({
-                'active_calls': total_active,
-                'queue_size': queue_size,
-                'timestamp': datetime.utcnow()
-            })
+            async with get_analytics_engine() as analytics:
+                await analytics.update_system_metrics({
+                    'active_calls': total_active,
+                    'queue_size': queue_size,
+                    'timestamp': datetime.utcnow()
+                })
             
         except Exception as e:
             logger.error(f"Error updating system metrics: {e}")
@@ -437,9 +485,10 @@ class CallOrchestrationService:
                 
                 for campaign in campaigns:
                     # Check if budget is exceeded
-                    if not await cost_optimization_service.check_budget_available(campaign.id):
-                        # Pause campaign
-                        await self._pause_campaign(campaign.id)
+                    async with get_cost_optimization_engine() as cost_engine:
+                        if not await cost_engine.check_budget_available(campaign.id):
+                            # Pause campaign
+                            await self._pause_campaign(campaign.id)
                         
         except Exception as e:
             logger.error(f"Error checking budget limits: {e}")
@@ -547,6 +596,62 @@ class CallOrchestrationService:
         except Exception as e:
             logger.error(f"Error cancelling call: {e}")
             return False
+
+    async def get_transfer_statistics(self) -> Dict[str, Any]:
+        """Get statistics about transfer success rates"""
+        try:
+            async with get_db() as db:
+                # Total transfers attempted
+                total_transfers = await db.execute(
+                    select(func.count(CallLog.id)).where(CallLog.transfer_attempted == True)
+                )
+                total_transfers = total_transfers.scalar()
+                
+                # Successful transfers (human agent connected)
+                successful_transfers = await db.execute(
+                    select(func.count(CallLog.id)).where(
+                        and_(
+                            CallLog.transfer_attempted == True,
+                            CallLog.status == CallStatus.TRANSFERRED
+                        )
+                    )
+                )
+                successful_transfers = successful_transfers.scalar()
+                
+                # Failed transfers
+                failed_transfers = await db.execute(
+                    select(func.count(CallLog.id)).where(CallLog.transfer_failed == True)
+                )
+                failed_transfers = failed_transfers.scalar()
+                
+                # Average time to transfer
+                avg_transfer_time = await db.execute(
+                    select(func.avg(
+                        func.extract('epoch', CallLog.ai_disconnected_at) - 
+                        func.extract('epoch', CallLog.transfer_time)
+                    )).where(
+                        and_(
+                            CallLog.transfer_time.isnot(None),
+                            CallLog.ai_disconnected_at.isnot(None)
+                        )
+                    )
+                )
+                avg_transfer_time = avg_transfer_time.scalar() or 0
+                
+                # Calculate success rate
+                transfer_success_rate = (successful_transfers / total_transfers * 100) if total_transfers > 0 else 0
+                
+                return {
+                    'total_transfers': total_transfers,
+                    'successful_transfers': successful_transfers,
+                    'failed_transfers': failed_transfers,
+                    'transfer_success_rate': round(transfer_success_rate, 2),
+                    'avg_transfer_time_seconds': round(avg_transfer_time, 2)
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting transfer statistics: {e}")
+            return {}
 
 # Global instance
 call_orchestration_service = CallOrchestrationService() 

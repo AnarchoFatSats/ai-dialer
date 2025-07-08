@@ -62,7 +62,22 @@ class Campaign(Base):
     
     # Campaign Configuration
     script_template = Column(Text, nullable=False)
-    max_concurrent_calls = Column(Integer, default=100)
+    max_concurrent_calls = Column(Integer, default=10)
+    call_timeout_seconds = Column(Integer, default=30)
+    retry_attempts = Column(Integer, default=3)
+    retry_delay_minutes = Column(Integer, default=60)
+    
+    # Transfer Settings
+    transfer_number = Column(String(20))
+    backup_transfer_number = Column(String(20))
+    transfer_on_qualification = Column(Boolean, default=True)
+    
+    # AI & Script Configuration
+    ai_prompt = Column(Text)
+    greeting_message = Column(Text)
+    objection_responses = Column(ARRAY(Text))
+    
+    # Campaign Settings
     max_daily_budget = Column(Float, default=1000.0)
     cost_per_minute_limit = Column(Float, default=0.025)
     
@@ -242,6 +257,14 @@ class CallLog(Base):
     ai_confidence_score = Column(Float)
     conversation_turns = Column(Integer, default=0)
     transfer_requested = Column(Boolean, default=False)
+    
+    # Transfer Information
+    transfer_attempted = Column(Boolean, default=False)
+    transfer_number = Column(String(20))
+    transfer_time = Column(DateTime)
+    transfer_failed = Column(Boolean, default=False)
+    transfer_failure_reason = Column(String(100))
+    ai_disconnected_at = Column(DateTime)
     
     # Cost Information
     cost_per_minute = Column(Float)
