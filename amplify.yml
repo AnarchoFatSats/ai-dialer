@@ -13,7 +13,11 @@ frontend:
     build:
       commands:
         - echo "=== Building React app ==="
-        - cd amplify_ui && npm run build
+        - echo "Current directory before build:"
+        - pwd
+        - ls -la
+        - echo "=== Building in amplify_ui directory ==="
+        - cd amplify_ui && pwd && npm run build
   artifacts:
     baseDirectory: amplify_ui/build
     files:
