@@ -17,7 +17,7 @@ frontend:
         - pwd
         - ls -la
         - echo "=== Building in amplify_ui directory ==="
-        - cd amplify_ui && pwd && npm run build
+        - cd amplify_ui && pwd && ls -la && npm run build
   artifacts:
     baseDirectory: amplify_ui/build
     files:
