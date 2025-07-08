@@ -1,0 +1,16 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd amplify_ui && npm ci
+    build:
+      commands:
+        - cd amplify_ui && npm run build
+  artifacts:
+    baseDirectory: amplify_ui/build
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - amplify_ui/node_modules/**/* 
