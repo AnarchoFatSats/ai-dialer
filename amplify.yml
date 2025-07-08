@@ -3,9 +3,16 @@ frontend:
   phases:
     preBuild:
       commands:
+        - echo "=== Debugging directory structure ==="
+        - pwd
+        - ls -la
+        - echo "=== Checking for amplify_ui directory ==="
+        - ls -la amplify_ui/ || echo "amplify_ui directory not found"
+        - echo "=== Installing dependencies ==="
         - cd amplify_ui && npm ci
     build:
       commands:
+        - echo "=== Building React app ==="
         - cd amplify_ui && npm run build
   artifacts:
     baseDirectory: amplify_ui/build
