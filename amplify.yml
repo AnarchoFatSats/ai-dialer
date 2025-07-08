@@ -3,21 +3,15 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "=== Debugging directory structure ==="
+        - echo "=== Using absolute paths approach ==="
         - pwd
         - ls -la
-        - echo "=== Checking for amplify_ui directory ==="
-        - ls -la amplify_ui/ || echo "amplify_ui directory not found"
-        - echo "=== Installing dependencies ==="
-        - cd amplify_ui && npm ci
+        - echo "=== Installing dependencies with absolute path ==="
+        - cd /codebuild/output/src*/src/ai-dialer/amplify_ui && npm ci
     build:
       commands:
-        - echo "=== Building React app ==="
-        - echo "Current directory before build:"
-        - pwd
-        - ls -la
-        - echo "=== Building in amplify_ui directory ==="
-        - cd amplify_ui && pwd && ls -la && npm run build
+        - echo "=== Building with absolute path ==="
+        - cd /codebuild/output/src*/src/ai-dialer/amplify_ui && pwd && ls -la && npm run build
   artifacts:
     baseDirectory: amplify_ui/build
     files:
