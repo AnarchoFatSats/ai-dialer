@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import uuid
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -19,6 +19,7 @@ import uvicorn
 from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.models import *
+from sqlalchemy import select
 from app.services.campaign_management import get_campaign_management_service
 from app.services.dnc_scrubbing import get_dnc_scrubbing_service
 from app.services.analytics_engine import get_analytics_engine
@@ -29,6 +30,7 @@ from app.services.ai_conversation import ai_conversation_engine
 from app.services.media_stream_handler import media_stream_handler
 from app.services.call_orchestration import call_orchestration_service
 from app.services.did_management import did_management_service
+from sqlalchemy import func, and_, select
 
 # Configure logging
 logging.basicConfig(
@@ -350,6 +352,80 @@ async def get_predictive_insights(
         logger.error(f"Error getting predictive insights: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get("/analytics/transfer-stats", tags=["Analytics"])
+async def get_transfer_statistics():
+    """Get transfer success rate and statistics."""
+    try:
+        from app.services.call_orchestration import call_orchestration_service
+        stats = await call_orchestration_service.get_transfer_statistics()
+        
+        return {
+            "success": True,
+            "data": stats,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting transfer statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/analytics/ai-performance", tags=["Analytics"])
+async def get_ai_performance_metrics():
+    """Get AI performance metrics including disconnect efficiency."""
+    try:
+        async with get_db() as db:
+            # Total calls handled by AI
+            total_ai_calls = await db.execute(
+                select(func.count(CallLog.id)).where(
+                    CallLog.conversation_turns > 0
+                )
+            )
+            total_ai_calls = total_ai_calls.scalar()
+            
+            # AI calls that successfully transferred
+            ai_transfers = await db.execute(
+                select(func.count(CallLog.id)).where(
+                    and_(
+                        CallLog.conversation_turns > 0,
+                        CallLog.status == CallStatus.TRANSFERRED
+                    )
+                )
+            )
+            ai_transfers = ai_transfers.scalar()
+            
+            # Average AI conversation duration
+            avg_ai_duration = await db.execute(
+                select(func.avg(CallLog.talk_time_seconds)).where(
+                    CallLog.conversation_turns > 0
+                )
+            )
+            avg_ai_duration = avg_ai_duration.scalar() or 0
+            
+            # Average AI response time
+            avg_response_time = await db.execute(
+                select(func.avg(CallLog.ai_response_time_ms)).where(
+                    CallLog.ai_response_time_ms.isnot(None)
+                )
+            )
+            avg_response_time = avg_response_time.scalar() or 0
+            
+            # AI efficiency metrics
+            ai_transfer_rate = (ai_transfers / total_ai_calls * 100) if total_ai_calls > 0 else 0
+            
+            return {
+                "success": True,
+                "data": {
+                    "total_ai_calls": total_ai_calls,
+                    "ai_transfers": ai_transfers,
+                    "ai_transfer_rate": round(ai_transfer_rate, 2),
+                    "avg_ai_duration_seconds": round(avg_ai_duration, 2),
+                    "avg_response_time_ms": round(avg_response_time, 2)
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+    except Exception as e:
+        logger.error(f"Error getting AI performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Quality Scoring Endpoints
 @app.post("/quality/evaluate", tags=["Quality Scoring"])
 async def evaluate_call_quality(
@@ -576,56 +652,132 @@ async def handle_call_answer_webhook(call_log_id: str):
         # Return fallback TwiML
         return Response(content="<Response><Say>Thank you for your time. Goodbye.</Say><Hangup/></Response>", media_type="application/xml")
 
-@app.post("/webhooks/twilio/call-status/{call_log_id}", tags=["Webhooks"])
-async def handle_call_status_webhook(
-    call_log_id: str,
-    background_tasks: BackgroundTasks,
-    request: Dict[str, Any]
-):
-    """Handle Twilio call status webhook."""
+@app.post("/webhooks/twilio/call-status", tags=["Webhooks"])
+async def handle_call_status_webhook(request: Request):
+    """Handle Twilio call status webhooks."""
     try:
-        background_tasks.add_task(
-            twilio_service.handle_call_status_webhook,
-            int(call_log_id),
-            request
-        )
-        return {"status": "received"}
+        form_data = await request.form()
+        call_log_id = int(form_data.get("call_log_id", 0))
+        
+        if call_log_id:
+            await twilio_service.handle_call_status_webhook(call_log_id, dict(form_data))
+            
+        return {"status": "success"}
     except Exception as e:
         logger.error(f"Error handling call status webhook: {e}")
         return {"status": "error", "message": str(e)}
 
-# Webhook Endpoints (for Twilio integration - legacy)
-@app.post("/webhooks/call-status", tags=["Webhooks"])
-async def handle_call_status_webhook_legacy(
-    # Twilio webhook parameters would be parsed here
-    background_tasks: BackgroundTasks
-):
-    """Handle Twilio call status webhooks (legacy)."""
+@app.post("/webhooks/twilio/transfer-status/{call_log_id}", tags=["Webhooks"])
+async def handle_transfer_status_webhook(call_log_id: int, request: Request):
+    """Handle Twilio transfer status webhooks."""
     try:
-        # TODO: Parse Twilio webhook data
-        # TODO: Update call log in database
-        # TODO: Trigger quality scoring if call completed
-        # TODO: Update cost tracking
+        form_data = await request.form()
         
-        return {"status": "received"}
+        # Extract transfer status information
+        dial_call_status = form_data.get("DialCallStatus")
+        dial_call_sid = form_data.get("DialCallSid")
+        dial_call_duration = form_data.get("DialCallDuration")
+        
+        logger.info(f"Transfer status for call {call_log_id}: {dial_call_status}")
+        
+        # Update call log with transfer status
+        async with get_db() as db:
+            call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+            call_log = await db.execute(call_log_query)
+            call_log = call_log.scalar_one_or_none()
+            
+            if call_log:
+                if dial_call_status == "answered":
+                    call_log.status = CallStatus.TRANSFERRED
+                    call_log.ai_disconnected_at = datetime.utcnow()
+                    
+                    # Trigger AI disconnect
+                    from app.services.call_orchestration import call_orchestration_service
+                    await call_orchestration_service.handle_ai_disconnect(call_log_id)
+                    
+                elif dial_call_status in ["busy", "no-answer", "failed", "canceled"]:
+                    call_log.transfer_failed = True
+                    call_log.transfer_failure_reason = dial_call_status
+                    
+                    # Resume AI conversation
+                    from app.services.ai_conversation import ai_conversation_engine
+                    await ai_conversation_engine.resume_conversation(call_log_id)
+                
+                await db.commit()
+        
+        return {"status": "success"}
     except Exception as e:
-        logger.error(f"Error handling call status webhook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error handling transfer status webhook: {e}")
+        return {"status": "error", "message": str(e)}
 
-@app.post("/webhooks/voice-insights", tags=["Webhooks"])
-async def handle_voice_insights_webhook(
-    background_tasks: BackgroundTasks
-):
-    """Handle Twilio Voice Insights webhooks."""
+@app.post("/webhooks/twilio/conference-status/{call_log_id}", tags=["Webhooks"])
+async def handle_conference_status_webhook(call_log_id: int, request: Request):
+    """Handle Twilio conference status webhooks."""
     try:
-        # TODO: Parse Voice Insights data (607/608 blocks)
-        # TODO: Update DID reputation scores
-        # TODO: Trigger DID rotation if needed
+        form_data = await request.form()
         
-        return {"status": "received"}
+        # Extract conference event information
+        status_callback_event = form_data.get("StatusCallbackEvent")
+        conference_sid = form_data.get("ConferenceSid")
+        friendly_name = form_data.get("FriendlyName")
+        
+        logger.info(f"Conference event for call {call_log_id}: {status_callback_event}")
+        
+        # Handle different conference events
+        if status_callback_event == "participant-join":
+            # New participant joined
+            participant_label = form_data.get("ParticipantLabel")
+            call_sid = form_data.get("CallSid")
+            
+            logger.info(f"Participant joined conference for call {call_log_id}: {participant_label}")
+            
+        elif status_callback_event == "participant-leave":
+            # Participant left
+            participant_label = form_data.get("ParticipantLabel")
+            call_sid = form_data.get("CallSid")
+            
+            logger.info(f"Participant left conference for call {call_log_id}: {participant_label}")
+            
+        elif status_callback_event == "conference-end":
+            # Conference ended
+            logger.info(f"Conference ended for call {call_log_id}")
+            
+            # Update call status
+            async with get_db() as db:
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if call_log and call_log.status == CallStatus.TRANSFERRED:
+                    call_log.status = CallStatus.COMPLETED
+                    call_log.completed_at = datetime.utcnow()
+                    await db.commit()
+        
+        return {"status": "success"}
     except Exception as e:
-        logger.error(f"Error handling voice insights webhook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error handling conference status webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/webhooks/twilio/conference-events/{call_log_id}", tags=["Webhooks"])
+async def handle_conference_events_webhook(call_log_id: int, request: Request):
+    """Handle Twilio conference events webhooks."""
+    try:
+        form_data = await request.form()
+        
+        # Extract event information
+        event_type = form_data.get("EventType")
+        conference_sid = form_data.get("ConferenceSid")
+        participant_call_sid = form_data.get("ParticipantCallSid")
+        
+        logger.info(f"Conference event for call {call_log_id}: {event_type}")
+        
+        # This webhook can be used for real-time monitoring
+        # of conference events for advanced analytics
+        
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Error handling conference events webhook: {e}")
+        return {"status": "error", "message": str(e)}
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws/dashboard")

@@ -12,7 +12,7 @@ from twilio.base.exceptions import TwilioRestException
 
 from app.config import settings
 from app.database import get_db
-from app.models import Campaign, Lead, CallLog, DIDPool, CallAnalytics
+from app.models import Campaign, Lead, CallLog, DIDPool
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ class TwilioIntegrationService:
             logger.error(f"Error handling call status webhook: {e}")
     
     async def transfer_call(self, call_log_id: int, transfer_number: str) -> Dict[str, Any]:
-        """Transfer call to human agent"""
+        """Transfer call to human agent with AI disconnect detection"""
         try:
             async with get_db() as db:
                 call_log_query = select(CallLog).where(CallLog.id == call_log_id)
@@ -215,10 +215,34 @@ class TwilioIntegrationService:
                 if not call_log or not call_log.twilio_call_sid:
                     raise ValueError(f"Call log {call_log_id} not found or no Twilio SID")
                 
-                # Create transfer TwiML
+                # Create enhanced transfer TwiML with human detection
                 twiml = VoiceResponse()
-                twiml.say("Please hold while I transfer you to a specialist.")
-                twiml.dial(transfer_number, timeout=30)
+                
+                # Bridge the call to human agent with monitoring
+                dial = twiml.dial(
+                    transfer_number,
+                    timeout=30,
+                    # Webhook to detect when human agent answers
+                    action=f"https://{settings.DOMAIN}/webhooks/twilio/transfer-status/{call_log_id}",
+                    method="POST"
+                )
+                
+                # Conference-based transfer for better control
+                conference_name = f"transfer-{call_log_id}-{datetime.utcnow().timestamp()}"
+                
+                # Create conference room
+                dial.conference(
+                    conference_name,
+                    # Monitor human agent connection
+                    statusCallback=f"https://{settings.DOMAIN}/webhooks/twilio/conference-status/{call_log_id}",
+                    statusCallbackMethod="POST",
+                    statusCallbackEvent="start,end,join,leave,mute,unmute,hold,unhold",
+                    # AI detection settings
+                    eventCallbackUrl=f"https://{settings.DOMAIN}/webhooks/twilio/conference-events/{call_log_id}",
+                    beep=False,
+                    waitUrl="",
+                    maxParticipants=3  # Prospect, AI, Human agent
+                )
                 
                 # Update the call with new TwiML
                 call = self.client.calls(call_log.twilio_call_sid).update(
@@ -229,19 +253,268 @@ class TwilioIntegrationService:
                 call_log.transfer_attempted = True
                 call_log.transfer_number = transfer_number
                 call_log.transfer_time = datetime.utcnow()
+                call_log.status = CallStatus.TRANSFERRING
                 await db.commit()
                 
-                logger.info(f"Call {call_log.twilio_call_sid} transferred to {transfer_number}")
+                # Start monitoring for human agent connection
+                await self._monitor_transfer_progress(call_log_id, conference_name)
+                
+                logger.info(f"Call {call_log.twilio_call_sid} transferred to {transfer_number} via conference {conference_name}")
                 
                 return {
                     'call_sid': call_log.twilio_call_sid,
                     'transfer_number': transfer_number,
-                    'status': 'transferred'
+                    'conference_name': conference_name,
+                    'status': 'transferring'
                 }
                 
         except Exception as e:
             logger.error(f"Error transferring call: {e}")
             raise
+    
+    async def _monitor_transfer_progress(self, call_log_id: int, conference_name: str):
+        """Monitor transfer progress and detect human agent connection"""
+        try:
+            # Start background monitoring task
+            asyncio.create_task(self._transfer_monitoring_loop(call_log_id, conference_name))
+            
+        except Exception as e:
+            logger.error(f"Error starting transfer monitoring: {e}")
+    
+    async def _transfer_monitoring_loop(self, call_log_id: int, conference_name: str):
+        """Background loop to monitor transfer and detect human agent"""
+        try:
+            max_wait_time = 60  # 60 seconds max wait
+            check_interval = 2  # Check every 2 seconds
+            elapsed_time = 0
+            
+            while elapsed_time < max_wait_time:
+                # Check conference status
+                transfer_status = await self._check_transfer_status(call_log_id, conference_name)
+                
+                if transfer_status == 'human_connected':
+                    # Human agent answered - disconnect AI
+                    await self._disconnect_ai_from_call(call_log_id)
+                    logger.info(f"Human agent connected to call {call_log_id}, AI disconnected")
+                    break
+                    
+                elif transfer_status == 'failed':
+                    # Transfer failed - resume AI conversation
+                    await self._resume_ai_conversation(call_log_id)
+                    logger.info(f"Transfer failed for call {call_log_id}, AI resumed")
+                    break
+                    
+                elif transfer_status == 'no_answer':
+                    # No answer from human - resume AI or end call
+                    await self._handle_transfer_no_answer(call_log_id)
+                    break
+                
+                await asyncio.sleep(check_interval)
+                elapsed_time += check_interval
+            
+            # Timeout reached
+            if elapsed_time >= max_wait_time:
+                logger.warning(f"Transfer monitoring timeout for call {call_log_id}")
+                await self._handle_transfer_timeout(call_log_id)
+                
+        except Exception as e:
+            logger.error(f"Error in transfer monitoring loop: {e}")
+    
+    async def _check_transfer_status(self, call_log_id: int, conference_name: str) -> str:
+        """Check current transfer status"""
+        try:
+            # Get conference details
+            conferences = self.client.conferences.list(friendly_name=conference_name)
+            
+            if not conferences:
+                return 'no_conference'
+            
+            conference = conferences[0]
+            participants = self.client.conferences(conference.sid).participants.list()
+            
+            # Analyze participants
+            human_agent_connected = False
+            prospect_connected = False
+            
+            for participant in participants:
+                # Check if this is the human agent (outbound call to transfer number)
+                if participant.call_sid_to_coach is None:  # Not coaching, actual participant
+                    if participant.muted == False and participant.hold == False:
+                        # Active participant - could be human agent
+                        if self._is_human_agent_call(participant, call_log_id):
+                            human_agent_connected = True
+                        else:
+                            prospect_connected = True
+            
+            # Determine status
+            if human_agent_connected and prospect_connected:
+                return 'human_connected'
+            elif not human_agent_connected and prospect_connected:
+                return 'waiting_for_human'
+            else:
+                return 'failed'
+                
+        except Exception as e:
+            logger.error(f"Error checking transfer status: {e}")
+            return 'error'
+    
+    async def _is_human_agent_call(self, participant, call_log_id: int) -> bool:
+        """Determine if participant is the human agent"""
+        try:
+            # Get call details
+            call = self.client.calls(participant.call_sid).fetch()
+            
+            # Check if call is to transfer number
+            async with get_db() as db:
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if call_log and call_log.transfer_number:
+                    # Check if this call is to the transfer number
+                    return call.to == call_log.transfer_number
+                    
+        except Exception as e:
+            logger.error(f"Error checking if human agent call: {e}")
+            
+        return False
+    
+    async def _disconnect_ai_from_call(self, call_log_id: int):
+        """Disconnect AI from call when human agent connects"""
+        try:
+            # End AI conversation
+            from app.services.ai_conversation import ai_conversation_engine
+            await ai_conversation_engine.end_conversation(call_log_id)
+            
+            # Close media stream
+            from app.services.media_stream_handler import media_stream_handler
+            await media_stream_handler.close_stream(call_log_id)
+            
+            # Update call log
+            async with get_db() as db:
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if call_log:
+                    call_log.status = CallStatus.TRANSFERRED
+                    call_log.ai_disconnected_at = datetime.utcnow()
+                    await db.commit()
+            
+            # Notify call orchestration to free up capacity
+            from app.services.call_orchestration import call_orchestration_service
+            await call_orchestration_service.handle_ai_disconnect(call_log_id)
+            
+            logger.info(f"AI successfully disconnected from call {call_log_id}")
+            
+        except Exception as e:
+            logger.error(f"Error disconnecting AI from call: {e}")
+    
+    async def _resume_ai_conversation(self, call_log_id: int):
+        """Resume AI conversation if transfer fails"""
+        try:
+            # Update call status
+            async with get_db() as db:
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if call_log:
+                    call_log.status = CallStatus.IN_PROGRESS
+                    call_log.transfer_failed = True
+                    await db.commit()
+            
+            # Create fallback TwiML to resume AI
+            twiml = VoiceResponse()
+            twiml.say("I'm sorry, our specialist is currently unavailable. Let me continue helping you.")
+            
+            # Reconnect to AI media stream
+            twiml.start().stream(
+                url=f"wss://{settings.DOMAIN}/ws/media-stream/{call_log_id}",
+                track="both_tracks"
+            )
+            
+            # Update call with resume TwiML
+            call = self.client.calls(call_log.twilio_call_sid).update(
+                twiml=str(twiml)
+            )
+            
+            # Restart AI conversation
+            from app.services.ai_conversation import ai_conversation_engine
+            await ai_conversation_engine.resume_conversation(call_log_id)
+            
+            logger.info(f"AI conversation resumed for call {call_log_id}")
+            
+        except Exception as e:
+            logger.error(f"Error resuming AI conversation: {e}")
+    
+    async def _handle_transfer_no_answer(self, call_log_id: int):
+        """Handle case when human agent doesn't answer"""
+        try:
+            # Update call log
+            async with get_db() as db:
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if call_log:
+                    call_log.transfer_failed = True
+                    call_log.transfer_failure_reason = "no_answer"
+                    await db.commit()
+            
+            # Option 1: Try backup transfer number
+            await self._try_backup_transfer(call_log_id)
+            
+            # Option 2: If no backup, politely end call
+            # await self._politely_end_call(call_log_id)
+            
+        except Exception as e:
+            logger.error(f"Error handling transfer no answer: {e}")
+    
+    async def _try_backup_transfer(self, call_log_id: int):
+        """Try backup transfer number if primary fails"""
+        try:
+            async with get_db() as db:
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if call_log:
+                    campaign_query = select(Campaign).where(Campaign.id == call_log.campaign_id)
+                    campaign = await db.execute(campaign_query)
+                    campaign = campaign.scalar_one_or_none()
+                    
+                    if campaign and campaign.backup_transfer_number:
+                        logger.info(f"Trying backup transfer for call {call_log_id}")
+                        await self.transfer_call(call_log_id, campaign.backup_transfer_number)
+                    else:
+                        # No backup - resume AI or end call
+                        await self._resume_ai_conversation(call_log_id)
+                        
+        except Exception as e:
+            logger.error(f"Error trying backup transfer: {e}")
+    
+    async def _handle_transfer_timeout(self, call_log_id: int):
+        """Handle transfer monitoring timeout"""
+        try:
+            logger.warning(f"Transfer timeout for call {call_log_id}")
+            
+            # Update call log
+            async with get_db() as db:
+                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log = await db.execute(call_log_query)
+                call_log = call_log.scalar_one_or_none()
+                
+                if call_log:
+                    call_log.transfer_failed = True
+                    call_log.transfer_failure_reason = "timeout"
+                    await db.commit()
+            
+            # Default to AI disconnect (assume human connected)
+            await self._disconnect_ai_from_call(call_log_id)
+            
+        except Exception as e:
+            logger.error(f"Error handling transfer timeout: {e}")
     
     async def hangup_call(self, call_log_id: int) -> Dict[str, Any]:
         """Hang up an active call"""
