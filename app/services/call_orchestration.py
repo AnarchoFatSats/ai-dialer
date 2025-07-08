@@ -465,11 +465,8 @@ class CallOrchestrationService:
             
             # Update analytics
             async with get_analytics_engine() as analytics:
-                await analytics.update_system_metrics({
-                    'active_calls': total_active,
-                    'queue_size': queue_size,
-                    'timestamp': datetime.utcnow()
-                })
+                await analytics.record_realtime_metric('active_calls', total_active)
+                await analytics.record_realtime_metric('queue_size', queue_size)
             
         except Exception as e:
             logger.error(f"Error updating system metrics: {e}")
