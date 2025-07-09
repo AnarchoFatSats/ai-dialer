@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import uuid
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status, Request
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -29,8 +29,9 @@ from app.services.ai_conversation import ai_conversation_engine
 from app.services.aws_connect_media_handler import aws_connect_media_handler
 from app.services.call_orchestration import call_orchestration_service
 from app.services.did_management import did_management_service
-from sqlalchemy import func, and_, select, text
+from sqlalchemy import func, and_, select, text, update
 from sqlalchemy.orm import selectinload
+from uuid import UUID
 
 # Configure logging
 logging.basicConfig(
@@ -1147,6 +1148,488 @@ async def deploy_conversation_template(campaign_id: str, template_data: dict):
         await db.commit()
         
         return {"message": f"Template '{template['name']}' deployed successfully"}
+
+# Multi-Agent System API Endpoints
+
+@app.post("/api/agents/pools", response_model=dict)
+async def create_agent_pool(
+    name: str = Form(...),
+    region: str = Form(...),
+    voice_type: str = Form(...),
+    conversation_style: str = Form(...),
+    response_timing: str = Form(...),
+    active_start: str = Form(...),
+    active_end: str = Form(...),
+    timezone: str = Form(...),
+    max_calls_per_hour: int = Form(20),
+    rest_hours: int = Form(4),
+    velocity: str = Form("moderate")
+):
+    """Create a new agent pool"""
+    try:
+        personality_config = {
+            "voice_type": voice_type,
+            "conversation_style": conversation_style,
+            "response_timing": response_timing
+        }
+        
+        active_hours = {
+            "start": active_start,
+            "end": active_end,
+            "timezone": timezone
+        }
+        
+        dialing_pattern = {
+            "max_calls_per_hour": max_calls_per_hour,
+            "rest_hours": rest_hours,
+            "velocity": velocity
+        }
+        
+        agent_pool = await agent_pool_manager.create_agent_pool(
+            name=name,
+            region=region,
+            personality_config=personality_config,
+            active_hours=active_hours,
+            dialing_pattern=dialing_pattern
+        )
+        
+        return {
+            "success": True,
+            "agent_pool_id": str(agent_pool.id),
+            "message": f"Agent pool '{name}' created successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to create agent pool: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/pools/{agent_id}/performance", response_model=dict)
+async def get_agent_performance(agent_id: str):
+    """Get agent performance summary"""
+    try:
+        agent_uuid = UUID(agent_id)
+        performance = await agent_pool_manager.get_agent_performance_summary(agent_uuid)
+        
+        if not performance:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        return {
+            "success": True,
+            "performance": performance
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    except Exception as e:
+        logger.error(f"Failed to get agent performance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/pools/{agent_id}/numbers/assign", response_model=dict)
+async def assign_numbers_to_agent(
+    agent_id: str,
+    number_count: int = Form(20),
+    area_codes: str = Form(None)  # Comma-separated area codes
+):
+    """Assign numbers to an agent"""
+    try:
+        agent_uuid = UUID(agent_id)
+        
+        # Parse area codes
+        preferred_area_codes = None
+        if area_codes:
+            preferred_area_codes = [code.strip() for code in area_codes.split(',')]
+        
+        assigned_numbers = await number_pool_manager.assign_numbers_to_agent(
+            agent_id=agent_uuid,
+            number_count=number_count,
+            preferred_area_codes=preferred_area_codes
+        )
+        
+        return {
+            "success": True,
+            "assigned_numbers": len(assigned_numbers),
+            "number_ids": [str(num_id) for num_id in assigned_numbers],
+            "message": f"Assigned {len(assigned_numbers)} numbers to agent"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    except Exception as e:
+        logger.error(f"Failed to assign numbers to agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/numbers/pools/statistics", response_model=dict)
+async def get_pool_statistics():
+    """Get comprehensive pool statistics"""
+    try:
+        statistics = await number_pool_manager.get_pool_statistics()
+        
+        return {
+            "success": True,
+            "statistics": statistics
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get pool statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/numbers/{number_id}/health", response_model=dict)
+async def get_number_health(number_id: str):
+    """Get number health monitoring data"""
+    try:
+        number_uuid = UUID(number_id)
+        health_data = await number_pool_manager.monitor_number_health(number_uuid)
+        
+        if not health_data:
+            raise HTTPException(status_code=404, detail="Number not found")
+        
+        return {
+            "success": True,
+            "health_data": health_data
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid number ID format")
+    except Exception as e:
+        logger.error(f"Failed to get number health: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/pools/{agent_id}/numbers/rotate", response_model=dict)
+async def rotate_agent_numbers(agent_id: str):
+    """Rotate numbers for an agent"""
+    try:
+        agent_uuid = UUID(agent_id)
+        
+        await number_pool_manager.rotate_numbers_for_agent(agent_uuid)
+        
+        return {
+            "success": True,
+            "message": "Numbers rotated successfully"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    except Exception as e:
+        logger.error(f"Failed to rotate agent numbers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/optimal", response_model=dict)
+async def get_optimal_agent_for_call(
+    target_phone: str,
+    campaign_id: str,
+    area_code: str = None
+):
+    """Get optimal agent for a specific call"""
+    try:
+        campaign_uuid = UUID(campaign_id)
+        
+        # Extract area code from phone number if not provided
+        if not area_code and target_phone:
+            if target_phone.startswith('+1') and len(target_phone) >= 5:
+                area_code = target_phone[2:5]
+            elif len(target_phone) >= 3:
+                area_code = target_phone[:3]
+        
+        optimal_agent = await agent_pool_manager.get_optimal_agent_for_call(
+            target_phone=target_phone,
+            campaign_id=campaign_uuid,
+            area_code=area_code
+        )
+        
+        if not optimal_agent:
+            return {
+                "success": False,
+                "message": "No available agents found for this call"
+            }
+        
+        return {
+            "success": True,
+            "agent": {
+                "id": str(optimal_agent.id),
+                "name": optimal_agent.name,
+                "region": optimal_agent.region,
+                "success_rate": optimal_agent.success_rate,
+                "answer_rate": optimal_agent.answer_rate
+            }
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID format")
+    except Exception as e:
+        logger.error(f"Failed to get optimal agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/numbers/optimal", response_model=dict)
+async def get_optimal_number_for_call(
+    agent_id: str,
+    target_phone: str,
+    area_code: str = None
+):
+    """Get optimal number for a specific call"""
+    try:
+        agent_uuid = UUID(agent_id)
+        
+        # Extract area code from phone number if not provided
+        if not area_code and target_phone:
+            if target_phone.startswith('+1') and len(target_phone) >= 5:
+                area_code = target_phone[2:5]
+            elif len(target_phone) >= 3:
+                area_code = target_phone[:3]
+        
+        optimal_number = await number_pool_manager.get_optimal_number_for_call(
+            agent_id=agent_uuid,
+            target_phone=target_phone,
+            area_code=area_code
+        )
+        
+        if not optimal_number:
+            return {
+                "success": False,
+                "message": "No available numbers found for this call"
+            }
+        
+        # Get number details
+        async with AsyncSessionLocal() as session:
+            query = select(DIDPool.phone_number).where(DIDPool.id == optimal_number)
+            result = await session.execute(query)
+            phone_number = result.scalar()
+        
+        return {
+            "success": True,
+            "number": {
+                "id": str(optimal_number),
+                "phone_number": phone_number
+            }
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    except Exception as e:
+        logger.error(f"Failed to get optimal number: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/calls/complete", response_model=dict)
+async def complete_call_tracking(
+    agent_id: str = Form(...),
+    call_successful: bool = Form(...),
+    call_answered: bool = Form(...),
+    call_duration: int = Form(0)
+):
+    """Complete call tracking for agent performance"""
+    try:
+        agent_uuid = UUID(agent_id)
+        
+        await agent_pool_manager.complete_call(
+            agent_id=agent_uuid,
+            call_successful=call_successful,
+            call_answered=call_answered,
+            call_duration=call_duration
+        )
+        
+        return {
+            "success": True,
+            "message": "Call tracking completed successfully"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    except Exception as e:
+        logger.error(f"Failed to complete call tracking: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/pools", response_model=dict)
+async def list_agent_pools():
+    """List all agent pools"""
+    try:
+        async with AsyncSessionLocal() as session:
+            query = select(AgentPool).where(AgentPool.is_active == True)
+            result = await session.execute(query)
+            agent_pools = result.scalars().all()
+            
+            pools_data = []
+            for pool in agent_pools:
+                pools_data.append({
+                    "id": str(pool.id),
+                    "name": pool.name,
+                    "region": pool.region,
+                    "success_rate": pool.success_rate,
+                    "answer_rate": pool.answer_rate,
+                    "reputation_score": pool.reputation_score,
+                    "is_active": pool.is_active,
+                    "created_at": pool.created_at.isoformat(),
+                    "last_used_at": pool.last_used_at.isoformat() if pool.last_used_at else None
+                })
+            
+            return {
+                "success": True,
+                "agent_pools": pools_data,
+                "total_count": len(pools_data)
+            }
+        
+    except Exception as e:
+        logger.error(f"Failed to list agent pools: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/numbers/pools/initialize", response_model=dict)
+async def initialize_number_pools():
+    """Initialize number pools and assignments"""
+    try:
+        await number_pool_manager.initialize_number_pools()
+        
+        return {
+            "success": True,
+            "message": "Number pools initialized successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize number pools: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/pools/{agent_id}/activate", response_model=dict)
+async def activate_agent_pool(agent_id: str):
+    """Activate an agent pool"""
+    try:
+        agent_uuid = UUID(agent_id)
+        
+        async with AsyncSessionLocal() as session:
+            update_query = update(AgentPool).where(
+                AgentPool.id == agent_uuid
+            ).values(
+                is_active=True,
+                updated_at=datetime.utcnow()
+            )
+            
+            await session.execute(update_query)
+            await session.commit()
+        
+        return {
+            "success": True,
+            "message": "Agent pool activated successfully"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    except Exception as e:
+        logger.error(f"Failed to activate agent pool: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/pools/{agent_id}/deactivate", response_model=dict)
+async def deactivate_agent_pool(agent_id: str):
+    """Deactivate an agent pool"""
+    try:
+        agent_uuid = UUID(agent_id)
+        
+        async with AsyncSessionLocal() as session:
+            update_query = update(AgentPool).where(
+                AgentPool.id == agent_uuid
+            ).values(
+                is_active=False,
+                updated_at=datetime.utcnow()
+            )
+            
+            await session.execute(update_query)
+            await session.commit()
+        
+        return {
+            "success": True,
+            "message": "Agent pool deactivated successfully"
+        }
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    except Exception as e:
+        logger.error(f"Failed to deactivate agent pool: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/multi-agent/dashboard", response_model=dict)
+async def get_multi_agent_dashboard():
+    """Get comprehensive multi-agent system dashboard"""
+    try:
+        # Get agent pools statistics
+        async with AsyncSessionLocal() as session:
+            # Agent pool counts
+            agent_counts_query = select(
+                func.count(AgentPool.id).label('total'),
+                func.sum(func.case((AgentPool.is_active == True, 1), else_=0)).label('active'),
+                func.sum(func.case((AgentPool.is_blocked == True, 1), else_=0)).label('blocked')
+            )
+            
+            agent_counts = await session.execute(agent_counts_query)
+            agent_stats = agent_counts.first()
+            
+            # Number assignments
+            number_assignments_query = select(
+                func.count(AgentNumber.id).label('total_assignments'),
+                func.sum(func.case((AgentNumber.is_blocked == False, 1), else_=0)).label('active_assignments'),
+                func.avg(AgentNumber.health_score).label('avg_health_score')
+            )
+            
+            number_assignments = await session.execute(number_assignments_query)
+            number_stats = number_assignments.first()
+            
+            # Recent performance
+            recent_calls_query = select(
+                func.count(CallLog.id).label('total_calls'),
+                func.sum(func.case((CallLog.call_answered == True, 1), else_=0)).label('answered_calls'),
+                func.sum(func.case((CallLog.call_status == 'completed', 1), else_=0)).label('successful_calls'),
+                func.avg(CallLog.call_duration).label('avg_duration')
+            ).where(
+                CallLog.created_at >= datetime.utcnow() - timedelta(hours=24)
+            )
+            
+            recent_calls = await session.execute(recent_calls_query)
+            call_stats = recent_calls.first()
+        
+        # Get pool statistics
+        pool_stats = await number_pool_manager.get_pool_statistics()
+        
+        return {
+            "success": True,
+            "dashboard": {
+                "agent_pools": {
+                    "total": agent_stats.total or 0,
+                    "active": agent_stats.active or 0,
+                    "blocked": agent_stats.blocked or 0
+                },
+                "number_assignments": {
+                    "total_assignments": number_stats.total_assignments or 0,
+                    "active_assignments": number_stats.active_assignments or 0,
+                    "average_health_score": float(number_stats.avg_health_score) if number_stats.avg_health_score else 0.0
+                },
+                "recent_performance": {
+                    "total_calls_24h": call_stats.total_calls or 0,
+                    "answered_calls_24h": call_stats.answered_calls or 0,
+                    "successful_calls_24h": call_stats.successful_calls or 0,
+                    "answer_rate_24h": (call_stats.answered_calls / call_stats.total_calls) if call_stats.total_calls > 0 else 0,
+                    "success_rate_24h": (call_stats.successful_calls / call_stats.total_calls) if call_stats.total_calls > 0 else 0,
+                    "avg_duration_24h": float(call_stats.avg_duration) if call_stats.avg_duration else 0.0
+                },
+                "pool_statistics": pool_stats
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get multi-agent dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Add imports at the top of the file
+from app.services.agent_pool_manager import agent_pool_manager
+from app.services.number_pool_manager import number_pool_manager
+from app.models import AgentPool, AgentNumber
 
 if __name__ == "__main__":
     uvicorn.run(
