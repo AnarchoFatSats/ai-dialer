@@ -28,7 +28,7 @@ dependencies = [
     "asyncpg>=0.29.0",
     "alembic>=1.12.0",
     "redis>=5.0.0",
-    "twilio>=8.10.0",
+    "boto3>=1.34.0",
     "anthropic>=0.7.0",
     "deepgram-sdk>=3.2.0",
     "elevenlabs>=0.2.0",
@@ -108,7 +108,7 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 known_first_party = ["app"]
-known_third_party = ["fastapi", "sqlalchemy", "twilio", "anthropic", "deepgram", "elevenlabs"]
+known_third_party = ["fastapi", "sqlalchemy", "boto3", "anthropic", "deepgram", "elevenlabs"]
 
 [tool.flake8]
 max-line-length = 88
@@ -141,7 +141,7 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-    "twilio.*",
+    "boto3.*",
     "anthropic.*",
     "deepgram.*",
     "elevenlabs.*",

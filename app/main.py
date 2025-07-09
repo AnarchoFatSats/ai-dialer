@@ -24,12 +24,12 @@ from app.services.dnc_scrubbing import get_dnc_scrubbing_service
 from app.services.analytics_engine import get_analytics_engine
 from app.services.quality_scoring import get_quality_scoring_service
 from app.services.cost_optimization import get_cost_optimization_engine
-from app.services.twilio_integration import twilio_service
+from app.services.aws_connect_integration import aws_connect_service
 from app.services.ai_conversation import ai_conversation_engine
-from app.services.media_stream_handler import media_stream_handler
+from app.services.aws_connect_media_handler import aws_connect_media_handler
 from app.services.call_orchestration import call_orchestration_service
 from app.services.did_management import did_management_service
-from sqlalchemy import func, and_, select
+from sqlalchemy import func, and_, select, text
 from sqlalchemy.orm import selectinload
 
 # Configure logging
@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI):
     try:
         # Test database connection
         async with AsyncSessionLocal() as session:
-            await session.execute(select(1))
+            await session.execute(text("SELECT 1"))
         logger.info("Database connection established")
         
         # Start call orchestration service
@@ -535,7 +535,7 @@ async def transfer_call(
 ):
     """Transfer an active call to human agent."""
     try:
-        result = await twilio_service.transfer_call(
+        result = await aws_connect_service.transfer_call(
             int(request.call_log_id),
             request.transfer_number
         )
@@ -634,150 +634,53 @@ async def analyze_did_health(did_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # WebSocket endpoint for real-time media streaming
-@app.websocket("/ws/media-stream/{call_log_id}")
-async def websocket_media_stream(websocket, call_log_id: str):
-    """WebSocket endpoint for Twilio Media Streams."""
-    await media_stream_handler.handle_media_stream(websocket, f"/ws/media-stream/{call_log_id}")
+@app.websocket("/ws/connect-media-stream/{call_log_id}")
+async def websocket_connect_media_stream(websocket, call_log_id: str):
+    """WebSocket endpoint for AWS Connect media streaming."""
+    await aws_connect_media_handler.handle_connect_media_stream(websocket, f"/ws/connect-media-stream/{call_log_id}")
 
-# Twilio Webhook Endpoints
-@app.post("/webhooks/twilio/call-answer/{call_log_id}", tags=["Webhooks"])
-async def handle_call_answer_webhook(call_log_id: str):
-    """Handle Twilio call answer webhook."""
+# AWS Connect Webhook Endpoints
+@app.post("/webhooks/aws-connect/contact-event", tags=["Webhooks"])
+async def handle_aws_connect_contact_event(event_data: Dict[str, Any]):
+    """Handle AWS Connect contact events."""
     try:
-        twiml = await twilio_service.generate_call_answer_twiml(int(call_log_id))
-        from fastapi.responses import Response
-        return Response(content=twiml, media_type="application/xml")
-    except Exception as e:
-        logger.error(f"Error handling call answer webhook: {e}")
-        # Return fallback TwiML
-        return Response(content="<Response><Say>Thank you for your time. Goodbye.</Say><Hangup/></Response>", media_type="application/xml")
-
-@app.post("/webhooks/twilio/call-status", tags=["Webhooks"])
-async def handle_call_status_webhook(request: Request):
-    """Handle Twilio call status webhooks."""
-    try:
-        form_data = await request.form()
-        call_log_id = int(form_data.get("call_log_id", 0))
-        
-        if call_log_id:
-            await twilio_service.handle_call_status_webhook(call_log_id, dict(form_data))
-            
+        await aws_connect_service.handle_contact_event(event_data)
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Error handling call status webhook: {e}")
+        logger.error(f"Error handling AWS Connect contact event: {e}")
         return {"status": "error", "message": str(e)}
 
-@app.post("/webhooks/twilio/transfer-status/{call_log_id}", tags=["Webhooks"])
-async def handle_transfer_status_webhook(call_log_id: int, request: Request):
-    """Handle Twilio transfer status webhooks."""
+@app.post("/webhooks/aws-connect/transfer-event", tags=["Webhooks"])
+async def handle_aws_connect_transfer_event(event_data: Dict[str, Any]):
+    """Handle AWS Connect transfer events."""
     try:
-        form_data = await request.form()
+        contact_id = event_data.get("ContactId")
+        event_type = event_data.get("EventType")
         
-        # Extract transfer status information
-        dial_call_status = form_data.get("DialCallStatus")
-        dial_call_sid = form_data.get("DialCallSid")
-        dial_call_duration = form_data.get("DialCallDuration")
-        
-        logger.info(f"Transfer status for call {call_log_id}: {dial_call_status}")
-        
-        # Update call log with transfer status
-        async with get_db() as db:
-            call_log_query = select(CallLog).where(CallLog.id == call_log_id)
-            call_log = await db.execute(call_log_query)
-            call_log = call_log.scalar_one_or_none()
-            
-            if call_log:
-                if dial_call_status == "answered":
-                    call_log.status = CallStatus.TRANSFERRED
-                    call_log.ai_disconnected_at = datetime.utcnow()
-                    
-                    # Trigger AI disconnect
-                    from app.services.call_orchestration import call_orchestration_service
-                    await call_orchestration_service.handle_ai_disconnect(call_log_id)
-                    
-                elif dial_call_status in ["busy", "no-answer", "failed", "canceled"]:
-                    call_log.transfer_failed = True
-                    call_log.transfer_failure_reason = dial_call_status
-                    
-                    # Resume AI conversation
-                    from app.services.ai_conversation import ai_conversation_engine
-                    await ai_conversation_engine.resume_conversation(call_log_id)
-                
-                await db.commit()
-        
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Error handling transfer status webhook: {e}")
-        return {"status": "error", "message": str(e)}
-
-@app.post("/webhooks/twilio/conference-status/{call_log_id}", tags=["Webhooks"])
-async def handle_conference_status_webhook(call_log_id: int, request: Request):
-    """Handle Twilio conference status webhooks."""
-    try:
-        form_data = await request.form()
-        
-        # Extract conference event information
-        status_callback_event = form_data.get("StatusCallbackEvent")
-        conference_sid = form_data.get("ConferenceSid")
-        friendly_name = form_data.get("FriendlyName")
-        
-        logger.info(f"Conference event for call {call_log_id}: {status_callback_event}")
-        
-        # Handle different conference events
-        if status_callback_event == "participant-join":
-            # New participant joined
-            participant_label = form_data.get("ParticipantLabel")
-            call_sid = form_data.get("CallSid")
-            
-            logger.info(f"Participant joined conference for call {call_log_id}: {participant_label}")
-            
-        elif status_callback_event == "participant-leave":
-            # Participant left
-            participant_label = form_data.get("ParticipantLabel")
-            call_sid = form_data.get("CallSid")
-            
-            logger.info(f"Participant left conference for call {call_log_id}: {participant_label}")
-            
-        elif status_callback_event == "conference-end":
-            # Conference ended
-            logger.info(f"Conference ended for call {call_log_id}")
-            
-            # Update call status
+        if event_type == "CONTACT_TRANSFERRED":
+            # Handle successful transfer
             async with get_db() as db:
-                call_log_query = select(CallLog).where(CallLog.id == call_log_id)
+                call_log_query = select(CallLog).where(CallLog.aws_contact_id == contact_id)
                 call_log = await db.execute(call_log_query)
                 call_log = call_log.scalar_one_or_none()
                 
-                if call_log and call_log.status == CallStatus.TRANSFERRED:
-                    call_log.status = CallStatus.COMPLETED
-                    call_log.completed_at = datetime.utcnow()
+                if call_log:
+                    call_log.call_status = 'transferred'
+                    call_log.transfer_successful = True
                     await db.commit()
+                    
+                    # Trigger AI disconnect
+                    from app.services.call_orchestration import call_orchestration_service
+                    await call_orchestration_service.handle_ai_disconnect(call_log.id)
         
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Error handling conference status webhook: {e}")
+        logger.error(f"Error handling AWS Connect transfer event: {e}")
         return {"status": "error", "message": str(e)}
 
-@app.post("/webhooks/twilio/conference-events/{call_log_id}", tags=["Webhooks"])
-async def handle_conference_events_webhook(call_log_id: int, request: Request):
-    """Handle Twilio conference events webhooks."""
-    try:
-        form_data = await request.form()
-        
-        # Extract event information
-        event_type = form_data.get("EventType")
-        conference_sid = form_data.get("ConferenceSid")
-        participant_call_sid = form_data.get("ParticipantCallSid")
-        
-        logger.info(f"Conference event for call {call_log_id}: {event_type}")
-        
-        # This webhook can be used for real-time monitoring
-        # of conference events for advanced analytics
-        
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Error handling conference events webhook: {e}")
-        return {"status": "error", "message": str(e)}
+
+
+
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws/dashboard")
