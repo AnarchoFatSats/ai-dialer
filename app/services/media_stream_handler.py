@@ -9,7 +9,7 @@ from websockets.exceptions import ConnectionClosed
 import io
 
 from app.services.ai_conversation import ai_conversation_engine
-from app.services.twilio_integration import twilio_service
+from app.services.aws_connect_integration import aws_connect_service
 from app.config import settings
 from app.database import get_db
 from app.models import CallLog
@@ -22,7 +22,7 @@ class MediaStreamHandler:
         self.audio_buffers: Dict[int, io.BytesIO] = {}
         
     async def handle_media_stream(self, websocket, path: str):
-        """Handle incoming WebSocket media stream from Twilio"""
+        """Handle incoming WebSocket media stream from AWS Connect"""
         try:
             # Extract call_log_id from path
             call_log_id = int(path.split('/')[-1])
@@ -164,7 +164,7 @@ class MediaStreamHandler:
                 }
             }
             
-            # Send to Twilio
+                            # Send to AWS Connect
             await websocket.send(json.dumps(media_message))
             
         except Exception as e:
@@ -222,8 +222,8 @@ class MediaStreamHandler:
                 # Wait a moment for message to play
                 await asyncio.sleep(3)
                 
-                # Initiate transfer via Twilio
-                await twilio_service.transfer_call(call_log_id, campaign.transfer_number)
+                # Initiate transfer via AWS Connect
+                await aws_connect_service.transfer_call(call_log_id, campaign.transfer_number)
                 
                 logger.info(f"Initiated transfer for call {call_log_id} to {campaign.transfer_number}")
                 
@@ -231,7 +231,7 @@ class MediaStreamHandler:
             logger.error(f"Error initiating transfer: {e}")
     
     async def _send_mark_message(self, call_log_id: int, mark_name: str):
-        """Send mark message to Twilio"""
+        """Send mark message to AWS Connect"""
         try:
             if call_log_id not in self.active_streams:
                 return
@@ -255,7 +255,7 @@ class MediaStreamHandler:
     async def clear_audio_buffer(self, call_log_id: int):
         """Clear audio buffer for a call"""
         try:
-            # Send clear message to Twilio
+                            # Send clear message to AWS Connect
             await self._send_clear_message(call_log_id)
             
             # Clear local buffer
@@ -266,7 +266,7 @@ class MediaStreamHandler:
             logger.error(f"Error clearing audio buffer: {e}")
     
     async def _send_clear_message(self, call_log_id: int):
-        """Send clear message to Twilio"""
+        """Send clear message to AWS Connect"""
         try:
             if call_log_id not in self.active_streams:
                 return

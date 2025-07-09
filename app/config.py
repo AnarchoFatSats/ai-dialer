@@ -13,11 +13,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:password@localhost:5432/aidialer"
     redis_url: str = "redis://localhost:6379"
     
-    # Twilio Configuration
-    twilio_account_sid: str
-    twilio_auth_token: str
-    twilio_phone_number: Optional[str] = None
-    webhook_base_url: str
+    # AWS Connect Configuration
+    aws_connect_instance_id: Optional[str] = None
+    aws_connect_instance_arn: Optional[str] = None
+    aws_connect_contact_flow_id: Optional[str] = None
+    aws_connect_queue_id: Optional[str] = None
+    webhook_base_url: str = "https://your-domain.com"
     
     # AI Services
     anthropic_api_key: str
@@ -106,12 +107,20 @@ class Settings(BaseSettings):
     spam_check_api_key: Optional[str] = None
     
     @property
-    def TWILIO_ACCOUNT_SID(self) -> str:
-        return self.twilio_account_sid
+    def AWS_CONNECT_INSTANCE_ID(self) -> Optional[str]:
+        return self.aws_connect_instance_id
     
     @property
-    def TWILIO_AUTH_TOKEN(self) -> str:
-        return self.twilio_auth_token
+    def AWS_CONNECT_INSTANCE_ARN(self) -> Optional[str]:
+        return self.aws_connect_instance_arn
+    
+    @property
+    def AWS_CONNECT_CONTACT_FLOW_ID(self) -> Optional[str]:
+        return self.aws_connect_contact_flow_id
+    
+    @property
+    def AWS_CONNECT_QUEUE_ID(self) -> Optional[str]:
+        return self.aws_connect_queue_id
     
     @property
     def BASE_URL(self) -> str:
@@ -152,9 +161,10 @@ class Settings(BaseSettings):
 # Create global settings instance
 settings = Settings()
 
-# Twilio Configuration
-TWILIO_WEBHOOK_EVENTS = [
-    "initiated", "ringing", "answered", "completed", "failed", "cancelled"
+# AWS Connect Configuration
+AWS_CONNECT_WEBHOOK_EVENTS = [
+    "CONTACT_FLOW_STARTED", "CONTACT_FLOW_ENDED", "CONTACT_CONNECTED", 
+    "CONTACT_DISCONNECTED", "CONTACT_TRANSFERRED", "CONTACT_QUEUED"
 ]
 
 # Claude System Prompt

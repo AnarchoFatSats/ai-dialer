@@ -13,8 +13,8 @@ alembic==1.12.1
 aiohttp==3.9.1
 httpx==0.25.2
 
-# Twilio SDK
-twilio==8.10.0
+# AWS SDK (replaces Twilio)
+boto3==1.34.0
 
 # AI Services
 anthropic==0.7.8

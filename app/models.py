@@ -108,6 +108,9 @@ class Campaign(Base):
     # A/B Testing Configuration
     ab_test_config = Column(JSON)
     
+    # AWS Connect Configuration
+    aws_contact_flow_id = Column(String(100))
+    
     # Campaign Settings
     max_daily_budget = Column(Float, default=1000.0)
     cost_per_minute_limit = Column(Float, default=0.025)
@@ -224,9 +227,9 @@ class DIDPool(Base):
     total_calls = Column(Integer, default=0)
     total_talk_seconds = Column(Integer, default=0)
     
-    # Twilio Information
-    twilio_sid = Column(String(100))
-    twilio_friendly_name = Column(String(255))
+    # AWS Connect Information
+    aws_phone_number_id = Column(String(100))
+    aws_phone_number_arn = Column(String(500))
     
     # Rotation & Cooldown
     last_used = Column(DateTime)
@@ -264,8 +267,8 @@ class CallLog(Base):
     did_id = Column(UUID(as_uuid=True), ForeignKey("did_pool.id"))
     
     # Call Identification
-    twilio_call_sid = Column(String(100), unique=True)
-    twilio_conference_sid = Column(String(100))
+    aws_contact_id = Column(String(100), unique=True)
+    aws_contact_flow_id = Column(String(100))
     
     # Call Details
     from_number = Column(String(20))
@@ -338,11 +341,11 @@ class CallLog(Base):
         Index('idx_call_logs_did', 'did_id'),
         Index('idx_call_logs_status', 'status'),
         Index('idx_call_logs_initiated', 'initiated_at'),
-        Index('idx_call_logs_twilio_sid', 'twilio_call_sid'),
+        Index('idx_call_logs_aws_contact_id', 'aws_contact_id'),
     )
     
     def __repr__(self):
-        return f"<CallLog(sid='{self.twilio_call_sid}', status='{self.status}')>"
+        return f"<CallLog(contact_id='{self.aws_contact_id}', status='{self.status}')>"
 
 # Analytics Models
 class CampaignAnalytics(Base):

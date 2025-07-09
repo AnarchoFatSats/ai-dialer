@@ -12,9 +12,9 @@ from sqlalchemy import func
 from app.config import settings
 from app.database import get_db
 from app.models import Campaign, Lead, CallLog, DIDPool
-from app.services.twilio_integration import twilio_service
+from app.services.aws_connect_integration import aws_connect_service
 from app.services.ai_conversation import ai_conversation_engine
-from app.services.media_stream_handler import media_stream_handler
+from app.services.aws_connect_media_handler import aws_connect_media_handler
 from app.services.did_management import did_management_service
 from app.services.dnc_scrubbing import get_dnc_scrubbing_service
 from app.services.cost_optimization import get_cost_optimization_engine
@@ -205,8 +205,8 @@ class CallOrchestrationService:
             if not await self._pre_flight_checks(call_request):
                 return False
             
-            # Initiate call via Twilio
-            call_result = await twilio_service.initiate_call(
+            # Initiate call via AWS Connect
+            call_result = await aws_connect_service.initiate_call(
                 call_request.lead_id,
                 call_request.campaign_id,
                 did['id']
@@ -330,7 +330,7 @@ class CallOrchestrationService:
                 if not call_log:
                     return CallStatus.FAILED
                 
-                # Map Twilio status to our status
+                # Map AWS Connect status to our status
                 status_map = {
                     'initiated': CallStatus.DIALING,
                     'ringing': CallStatus.RINGING,
@@ -380,10 +380,10 @@ class CallOrchestrationService:
             logger.warning(f"Handling timeout for call {call_log_id}")
             
             # Hang up the call
-            await twilio_service.hangup_call(call_log_id)
+            await aws_connect_service.hangup_call(call_log_id)
             
             # Close media stream
-            await media_stream_handler.close_stream(call_log_id)
+            await aws_connect_media_handler.close_stream(call_log_id)
             
             # End AI conversation
             await ai_conversation_engine.end_conversation(call_log_id)
@@ -400,7 +400,7 @@ class CallOrchestrationService:
             await ai_conversation_engine.end_conversation(call_log_id)
             
             # Close media stream
-            await media_stream_handler.close_stream(call_log_id)
+            await aws_connect_media_handler.close_stream(call_log_id)
             
             # Release DID
             call_request = call_data['call_request']
@@ -578,7 +578,7 @@ class CallOrchestrationService:
         try:
             if call_log_id in self.active_calls:
                 # Hang up the call
-                await twilio_service.hangup_call(call_log_id)
+                await aws_connect_service.hangup_call(call_log_id)
                 
                 # Handle completion
                 await self._handle_call_completion(call_log_id, self.active_calls[call_log_id])
