@@ -313,7 +313,7 @@ function App() {
               </Avatar>
               <Box>
                 <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                  AI DIALER
+                  REACH
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   Elite Edition
@@ -404,7 +404,7 @@ function App() {
                   <PowerSettingsNew />
                 </IconButton>
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                  Elite AI Dialer Dashboard
+                  Reach Dashboard
                 </Typography>
               </Box>
 
