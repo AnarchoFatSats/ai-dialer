@@ -17,9 +17,11 @@ class Settings(BaseSettings):
     aws_sns_region: Optional[str] = "us-east-1"
     aws_sns_topic_arn: Optional[str] = None
     
-    # AWS Connect Configuration for voice calls
+    # AWS Connect Configuration
     aws_connect_instance_id: Optional[str] = None
+    aws_connect_instance_arn: Optional[str] = None
     aws_connect_contact_flow_id: Optional[str] = None
+    aws_connect_queue_id: Optional[str] = None
     webhook_base_url: str = "https://your-domain.com"
     
     # AI Services (optional for development)
@@ -93,12 +95,6 @@ class Settings(BaseSettings):
     elasticache_endpoint: Optional[str] = None
     elasticache_port: int = 6379
     
-    # AWS Connect Configuration (optional for development)
-    aws_connect_instance_id: Optional[str] = "your_connect_instance_id"
-    aws_connect_instance_arn: Optional[str] = "your_connect_instance_arn"
-    aws_connect_contact_flow_id: Optional[str] = "your_contact_flow_id"
-    aws_connect_queue_id: Optional[str] = "your_queue_id"
-    
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"
@@ -132,6 +128,18 @@ class Settings(BaseSettings):
     @property
     def AWS_CONNECT_INSTANCE_ID(self) -> Optional[str]:
         return self.aws_connect_instance_id
+    
+    @property
+    def AWS_CONNECT_INSTANCE_ARN(self) -> Optional[str]:
+        return self.aws_connect_instance_arn
+    
+    @property
+    def AWS_CONNECT_CONTACT_FLOW_ID(self) -> Optional[str]:
+        return self.aws_connect_contact_flow_id
+    
+    @property
+    def AWS_CONNECT_QUEUE_ID(self) -> Optional[str]:
+        return self.aws_connect_queue_id
     
     @property
     def BASE_URL(self) -> str:

@@ -92,6 +92,27 @@ class CostOptimizationEngine:
         stmt = select(Campaign).where(Campaign.id == campaign_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+    
+    async def check_budget_available(self, campaign_id: uuid.UUID) -> bool:
+        """Check if campaign has budget available for more calls."""
+        try:
+            # Get current cost metrics
+            metrics = await self._calculate_cost_metrics(campaign_id)
+            
+            # Check if budget is exceeded
+            if metrics.budget_utilization >= 100:
+                return False
+            
+            # Check if projected daily cost would exceed budget
+            campaign = await self._get_campaign(campaign_id)
+            if campaign and metrics.projected_daily_cost > campaign.max_daily_budget:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking budget availability: {e}")
+            return False
         
     async def _calculate_cost_metrics(self, campaign_id: uuid.UUID) -> CostMetrics:
         """
@@ -640,10 +661,6 @@ class CostOptimizationEngine:
             }
 
 # Async context manager for cost optimization
-async def get_cost_optimization_engine():
+def get_cost_optimization_engine():
     """Get cost optimization engine with proper session management."""
-    async with CostOptimizationEngine() as engine:
-        yield engine
-
-# Global instance for imports
-cost_optimization_service = CostOptimizationEngine() 
+    return CostOptimizationEngine() 

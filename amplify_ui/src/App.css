@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+.App {
+  text-align: center;
+}
+
+/* Luxury scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1A1A1A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #FFD700, #FFA000);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #FFA000, #FFD700);
+}
+
+/* Custom animations */
+@keyframes goldGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+  }
+}
+
+.gold-glow {
+  animation: goldGlow 2s ease-in-out infinite;
+}
+
+/* Background gradient animation */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-background {
+  background: linear-gradient(-45deg, #0A0A0A, #1A1A1A, #2A2A2A, #1A1A1A);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+/* Luxury button effects */
+.luxury-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.luxury-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.luxury-button:hover::before {
+  left: 100%;
+}
+
+/* Text shadows for luxury feel */
+.luxury-text {
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Premium card hover effects */
+.premium-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%);
+  border: 1px solid #333;
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.1) 0%, transparent 70%);
+  transform: scale(0);
+  transition: transform 0.5s ease;
+}
+
+.premium-card:hover::before {
+  transform: scale(1);
+}
+
+.premium-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(255, 215, 0, 0.2);
+  border-color: #FFD700;
+}
+
+/* Money counter animation */
+@keyframes moneyCounter {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+    color: #00C851;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.money-counter {
+  animation: moneyCounter 0.5s ease-in-out;
+}
+
+/* Status indicators */
+.status-active {
+  color: #00C851;
+  text-shadow: 0 0 10px rgba(0, 200, 81, 0.5);
+}
+
+.status-warning {
+  color: #FF8F00;
+  text-shadow: 0 0 10px rgba(255, 143, 0, 0.5);
+}
+
+.status-error {
+  color: #FF1744;
+  text-shadow: 0 0 10px rgba(255, 23, 68, 0.5);
+}
+
+/* Elite loading spinner */
+@keyframes eliteSpinner {
+  0% {
+    transform: rotate(0deg);
+    border-color: #FFD700 transparent transparent transparent;
+  }
+  25% {
+    border-color: #00C851 #FFD700 transparent transparent;
+  }
+  50% {
+    border-color: transparent #00C851 #FFD700 transparent;
+  }
+  75% {
+    border-color: transparent transparent #00C851 #FFD700;
+  }
+  100% {
+    transform: rotate(360deg);
+    border-color: #FFD700 transparent transparent transparent;
+  }
+}
+
+.elite-spinner {
+  border: 4px solid transparent;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: eliteSpinner 1s linear infinite;
+}
+
+/* Responsive typography */
+@media (max-width: 768px) {
+  .luxury-text {
+    font-size: 0.9rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+} 

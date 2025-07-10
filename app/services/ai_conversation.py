@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 import anthropic
 from deepgram import Deepgram
-from elevenlabs import ElevenLabs
+import elevenlabs
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
@@ -44,29 +44,27 @@ class ConversationContext:
     
 class AIConversationEngine:
     def __init__(self):
-        # Initialize clients with error handling for development
+        # Initialize clients only if API keys are valid (not placeholder values)
+        self.anthropic_client = None
+        self.deepgram_client = None
+        
         try:
-            self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+            if settings.ANTHROPIC_API_KEY and not settings.ANTHROPIC_API_KEY.startswith('your_'):
+                self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         except Exception as e:
-            logger.warning(f"Anthropic client initialization failed: {e}")
-            self.anthropic_client = None
+            logger.warning(f"Failed to initialize Anthropic client: {e}")
             
         try:
-            # Only initialize Deepgram if we have a valid API key
-            if settings.DEEPGRAM_API_KEY and settings.DEEPGRAM_API_KEY != "your_deepgram_key":
+            if settings.DEEPGRAM_API_KEY and not settings.DEEPGRAM_API_KEY.startswith('your_'):
                 self.deepgram_client = Deepgram(settings.DEEPGRAM_API_KEY)
-            else:
-                self.deepgram_client = None
-                logger.warning("Deepgram client not initialized - invalid or missing API key")
         except Exception as e:
-            logger.warning(f"Deepgram client initialization failed: {e}")
-            self.deepgram_client = None
+            logger.warning(f"Failed to initialize Deepgram client: {e}")
             
         try:
-            self.elevenlabs_client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+            if settings.ELEVENLABS_API_KEY and not settings.ELEVENLABS_API_KEY.startswith('your_'):
+                elevenlabs.set_api_key(settings.ELEVENLABS_API_KEY)
         except Exception as e:
-            logger.warning(f"ElevenLabs client initialization failed: {e}")
-            self.elevenlabs_client = None
+            logger.warning(f"Failed to initialize ElevenLabs client: {e}")
             
         self.active_conversations: Dict[int, ConversationContext] = {}
         
@@ -167,6 +165,10 @@ class AIConversationEngine:
     async def _transcribe_audio(self, audio_data: bytes) -> Optional[str]:
         """Transcribe audio using Deepgram"""
         try:
+            if not self.deepgram_client:
+                logger.warning("Deepgram client not initialized - returning mock transcript")
+                return "Hello, I understand you're speaking but speech recognition is not configured."
+            
             # Configure Deepgram options
             options = {
                 'model': 'nova-2',
@@ -240,6 +242,10 @@ class AIConversationEngine:
                                           user_input: str, conversation_context: str) -> str:
         """Generate response based on conversation state"""
         try:
+            if not self.anthropic_client:
+                logger.warning("Anthropic client not initialized - returning fallback response")
+                return "Thank you for your call. I'm currently experiencing technical difficulties with our AI system. Please hold while I transfer you to a human agent."
+            
             # Build prompt based on current state
             if context.state == ConversationState.GREETING:
                 prompt = self._build_greeting_prompt(context, user_input, conversation_context)
@@ -456,18 +462,19 @@ Sentiment Score: {context.sentiment_score}
     async def _text_to_speech(self, text: str) -> bytes:
         """Convert text to speech using ElevenLabs"""
         try:
-            # Use ElevenLabs API
-            response = await self.elevenlabs_client.generate(
+            # Check if ElevenLabs is properly configured
+            if (not settings.ELEVENLABS_API_KEY or 
+                settings.ELEVENLABS_API_KEY.startswith('your_')):
+                logger.warning("ElevenLabs not configured - returning empty audio")
+                return b""
+            
+            # Use ElevenLabs functional API
+            audio_bytes = elevenlabs.generate(
                 text=text,
                 voice=settings.ELEVENLABS_VOICE_ID,
                 model="eleven_turbo_v2"
             )
             
-            # Convert to audio bytes
-            audio_bytes = b""
-            for chunk in response:
-                audio_bytes += chunk
-                
             return audio_bytes
             
         except Exception as e:
@@ -499,9 +506,9 @@ Sentiment Score: {context.sentiment_score}
     async def _log_conversation_turn(self, call_log_id: int, user_input: str, ai_response: str):
         """Log conversation turn to database"""
         try:
-            # For now, we'll just log to the application logs
-            # In the future, we can add a ConversationLog model
-            logger.info(f"Conversation turn - Call {call_log_id}: User: '{user_input}' -> AI: '{ai_response}'")
+            # For now, just log to the logger
+            # TODO: Implement ConversationLog model if detailed logging is needed
+            logger.info(f"Call {call_log_id} - User: {user_input[:50]}... AI: {ai_response[:50]}...")
                 
         except Exception as e:
             logger.error(f"Error logging conversation turn: {e}")
@@ -562,6 +569,60 @@ Sentiment Score: {context.sentiment_score}
             (context.qualified and context.sentiment_score > 0.5) or
             (context.objections_count > 2 and context.sentiment_score > 0.0)
         )
+    
+    async def resume_conversation(self, call_log_id: int) -> ConversationContext:
+        """Resume AI conversation after failed transfer"""
+        try:
+            # Check if conversation context exists
+            if call_log_id in self.active_conversations:
+                context = self.active_conversations[call_log_id]
+                
+                # Update state to indicate transfer failed
+                context.state = ConversationState.OBJECTION_HANDLING
+                context.transfer_requested = False
+                
+                # Add system message about transfer failure
+                context.conversation_history.append({
+                    "role": "system",
+                    "content": "Transfer to human agent failed. Resume AI conversation.",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                
+                logger.info(f"Resumed AI conversation for call {call_log_id}")
+                return context
+            else:
+                # Restart conversation from scratch
+                logger.info(f"Restarting AI conversation for call {call_log_id}")
+                return await self.start_conversation(call_log_id)
+                
+        except Exception as e:
+            logger.error(f"Error resuming conversation: {e}")
+            raise
+    
+    async def handle_transfer_success(self, call_log_id: int):
+        """Handle successful transfer to human agent"""
+        try:
+            if call_log_id in self.active_conversations:
+                context = self.active_conversations[call_log_id]
+                
+                # Update final state
+                context.state = ConversationState.TRANSFER
+                context.transfer_requested = True
+                
+                # Add final transfer message
+                context.conversation_history.append({
+                    "role": "system",
+                    "content": "Successfully transferred to human agent. AI conversation ended.",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                
+                # End conversation
+                await self.end_conversation(call_log_id)
+                
+                logger.info(f"Successfully handled transfer for call {call_log_id}")
+                
+        except Exception as e:
+            logger.error(f"Error handling transfer success: {e}")
 
 # Global instance
 ai_conversation_engine = AIConversationEngine() 

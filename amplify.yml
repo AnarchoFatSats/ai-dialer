@@ -1,0 +1,21 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "=== Using absolute paths approach ==="
+        - pwd
+        - ls -la
+        - echo "=== Installing dependencies with absolute path ==="
+        - cd /codebuild/output/src*/src/ai-dialer/amplify_ui && npm ci
+    build:
+      commands:
+        - echo "=== Building with absolute path ==="
+        - cd /codebuild/output/src*/src/ai-dialer/amplify_ui && pwd && ls -la && npm run build
+  artifacts:
+    baseDirectory: amplify_ui/build
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - amplify_ui/node_modules/**/* 
