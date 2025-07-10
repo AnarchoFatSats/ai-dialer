@@ -8,12 +8,12 @@ import json
 import aiohttp
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, or_, func
-from twilio.rest import Client
-from twilio.base.exceptions import TwilioRestException
+import boto3
+from botocore.exceptions import ClientError
 
 from app.config import settings
 from app.database import get_db
-from app.models import DIDPool, CallLog, CampaignAnalytics, Campaign
+from app.models import DIDPool, CallLog, Campaign
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,12 @@ class DIDHealthScore:
 
 class DIDManagementService:
     def __init__(self):
-        self.twilio_client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        self.connect_client = boto3.client(
+            'connect',
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+            region_name=settings.aws_region
+        )
         self.spam_check_apis = [
             'https://api.truecaller.com/v1/spam-check',
             'https://api.hiya.com/v1/reputation'
@@ -56,7 +61,7 @@ class DIDManagementService:
             async with get_db() as db:
                 for area_code in area_codes:
                     try:
-                        # Purchase DIDs from Twilio
+                        # Purchase DIDs from AWS Connect
                         dids = await self._purchase_dids(area_code, count_per_area)
                         
                         for did_info in dids:
@@ -69,7 +74,8 @@ class DIDManagementService:
                                 health_score=100.0,
                                 purchase_cost=did_info['cost'],
                                 monthly_cost=did_info['monthly_cost'],
-                                twilio_sid=did_info['sid'],
+                                aws_phone_number_id=did_info['phone_number_id'],
+                                aws_phone_number_arn=did_info['phone_number_arn'],
                                 purchased_at=datetime.utcnow()
                             )
                             
@@ -94,41 +100,51 @@ class DIDManagementService:
             raise
     
     async def _purchase_dids(self, area_code: str, count: int) -> List[Dict[str, Any]]:
-        """Purchase DIDs from Twilio"""
+        """Purchase DIDs from AWS Connect"""
         try:
             dids = []
             
-            # Search for available numbers
-            available_numbers = self.twilio_client.available_phone_numbers('US').local.list(
-                area_code=area_code,
-                limit=count
+            # Search for available phone numbers in AWS Connect
+            response = self.connect_client.search_available_phone_numbers(
+                TargetArn=settings.aws_connect_instance_arn,
+                PhoneNumberCountryCode='US',
+                PhoneNumberType='TOLL_FREE',  # or 'DID' for local numbers
+                PhoneNumberPrefix=area_code,
+                MaxResults=count
             )
             
-            for number in available_numbers:
+            available_numbers = response.get('AvailableNumbersList', [])
+            
+            for number_info in available_numbers:
                 try:
-                    # Purchase the number
-                    incoming_phone_number = self.twilio_client.incoming_phone_numbers.create(
-                        phone_number=number.phone_number,
-                        voice_url=f"{settings.BASE_URL}/webhooks/twilio/voice",
-                        voice_method='POST',
-                        status_callback=f"{settings.BASE_URL}/webhooks/twilio/number-status",
-                        status_callback_method='POST'
+                    # Claim the phone number
+                    claim_response = self.connect_client.claim_phone_number(
+                        TargetArn=settings.aws_connect_instance_arn,
+                        PhoneNumber=number_info['PhoneNumber']
+                    )
+                    
+                    # Associate with Connect instance
+                    associate_response = self.connect_client.associate_phone_number_contact_flow(
+                        InstanceId=settings.aws_connect_instance_id,
+                        PhoneNumberId=claim_response['PhoneNumberId'],
+                        ContactFlowId=settings.aws_connect_contact_flow_id
                     )
                     
                     dids.append({
-                        'phone_number': number.phone_number,
-                        'sid': incoming_phone_number.sid,
-                        'cost': 1.00,  # Standard Twilio cost
-                        'monthly_cost': 1.00,
+                        'phone_number': number_info['PhoneNumber'],
+                        'phone_number_id': claim_response['PhoneNumberId'],
+                        'phone_number_arn': claim_response['PhoneNumberArn'],
+                        'cost': 0.00,  # AWS Connect pricing varies
+                        'monthly_cost': 0.00,
                         'capabilities': {
                             'voice': True,
-                            'sms': number.capabilities.get('sms', False),
-                            'mms': number.capabilities.get('mms', False)
+                            'sms': False,  # AWS Connect doesn't support SMS
+                            'mms': False
                         }
                     })
                     
-                except TwilioRestException as e:
-                    logger.error(f"Error purchasing number {number.phone_number}: {e}")
+                except ClientError as e:
+                    logger.error(f"Error purchasing number {number_info['PhoneNumber']}: {e}")
                     continue
             
             return dids
@@ -508,8 +524,8 @@ class DIDManagementService:
                 )
                 await db.execute(update_query)
                 
-                # Release from Twilio (optional - may want to keep for analytics)
-                # await self._release_twilio_number(did_id)
+                        # Release from AWS Connect (optional - may want to keep for analytics)
+        # await self._release_aws_connect_number(did_id)
                 
         except Exception as e:
             logger.error(f"Error retiring DID: {e}")

@@ -1,0 +1,65 @@
+# Core FastAPI and async dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+alembic==1.12.1
+
+# HTTP Client
+aiohttp==3.9.1
+httpx==0.25.2
+
+# AWS SDK (replaces Twilio)
+boto3==1.34.0
+
+# AI Services
+anthropic==0.7.8
+deepgram-sdk==2.12.0  # Compatible with Python 3.9
+elevenlabs==0.2.26
+openai==1.3.8
+
+# Audio Processing
+pydub==0.25.1
+numpy==1.24.3
+scipy==1.11.4
+
+# WebSocket support
+websockets==12.0
+
+# Background Tasks
+celery==5.3.4
+redis==5.0.1
+
+# Data Processing
+pandas==2.1.4
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Monitoring and Logging
+prometheus-client==0.19.0
+structlog==23.2.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+
+# Development
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Additional utilities
+python-dateutil==2.8.2
+pytz==2023.3
+phonenumbers==8.13.25
+requests==2.31.0
+boto3==1.34.0
+psycopg2-binary==2.9.9 
