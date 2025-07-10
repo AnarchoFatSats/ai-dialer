@@ -19,6 +19,7 @@ import uvicorn
 from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.models import *
+from sqlalchemy import select
 from app.services.campaign_management import get_campaign_management_service
 from app.services.dnc_scrubbing import get_dnc_scrubbing_service
 from app.services.analytics_engine import get_analytics_engine
@@ -91,20 +92,54 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting AI Dialer application")
     
-    # Initialize services
+    # Initialize services with graceful error handling
+    startup_errors = []
+    
+    # Test database connection
     try:
-        # Test database connection
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         logger.info("Database connection established")
+    except Exception as e:
+        error_msg = f"Database connection failed: {e}"
+        logger.error(error_msg)
+        startup_errors.append(error_msg)
         
-        # Start call orchestration service
+        # For AWS deployment, database connection is critical
+        if not settings.debug:
+            raise
+    
+    # Test Redis connection (optional in development)
+    try:
+        # Add Redis connection test here if needed
+        logger.info("Redis connection check skipped (not implemented)")
+    except Exception as e:
+        error_msg = f"Redis connection failed: {e}"
+        logger.warning(error_msg)
+        startup_errors.append(error_msg)
+    
+    # Start call orchestration service
+    try:
         await call_orchestration_service.start_orchestration()
         logger.info("Call orchestration service started")
-        
     except Exception as e:
-        logger.error(f"Startup failed: {e}")
-        raise
+        error_msg = f"Call orchestration service failed to start: {e}"
+        logger.error(error_msg)
+        startup_errors.append(error_msg)
+        
+        # Don't fail startup for orchestration service in development
+        if not settings.debug:
+            raise
+    
+    # Log startup summary
+    if startup_errors:
+        logger.warning(f"Application started with {len(startup_errors)} warnings:")
+        for error in startup_errors:
+            logger.warning(f"  - {error}")
+        if settings.debug:
+            logger.info("Running in development mode - some service failures are acceptable")
+    else:
+        logger.info("All services started successfully")
     
     yield
     
@@ -112,8 +147,12 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down AI Dialer application")
     
     # Stop call orchestration service
-    await call_orchestration_service.stop_orchestration()
-    logger.info("Call orchestration service stopped")
+    try:
+        await call_orchestration_service.stop_orchestration()
+        logger.info("Call orchestration service stopped")
+    except Exception as e:
+        logger.error(f"Error stopping call orchestration service: {e}")
+        # Don't fail shutdown for orchestration service
 
 # Create FastAPI app
 app = FastAPI(
@@ -135,12 +174,37 @@ app.add_middleware(
 # Health check endpoint
 @app.get("/health", tags=["System"])
 async def health_check():
-    """Health check endpoint."""
-    return {
+    """Health check endpoint with AWS service status."""
+    health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "services": {}
     }
+    
+    # Check database connection
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(select(1))
+        health_status["services"]["database"] = "healthy"
+    except Exception as e:
+        health_status["services"]["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Check Redis connection (if configured)
+    try:
+        # Add Redis health check here if needed
+        health_status["services"]["redis"] = "not_implemented"
+    except Exception as e:
+        health_status["services"]["redis"] = f"unhealthy: {str(e)}"
+    
+    # Check external services
+    health_status["services"]["twilio"] = "configured" if settings.twilio_account_sid != "your_account_sid" else "not_configured"
+    health_status["services"]["anthropic"] = "configured" if settings.anthropic_api_key != "your_anthropic_key" else "not_configured"
+    health_status["services"]["deepgram"] = "configured" if settings.deepgram_api_key != "your_deepgram_key" else "not_configured"
+    health_status["services"]["elevenlabs"] = "configured" if settings.elevenlabs_api_key != "your_elevenlabs_key" else "not_configured"
+    
+    return health_status
 
 # Campaign Management Endpoints
 @app.post("/campaigns", tags=["Campaign Management"], response_model=Dict[str, Any])
