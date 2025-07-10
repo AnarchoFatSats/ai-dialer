@@ -643,4 +643,7 @@ class CostOptimizationEngine:
 async def get_cost_optimization_engine():
     """Get cost optimization engine with proper session management."""
     async with CostOptimizationEngine() as engine:
-        yield engine 
+        yield engine
+
+# Global instance for imports
+cost_optimization_service = CostOptimizationEngine() 

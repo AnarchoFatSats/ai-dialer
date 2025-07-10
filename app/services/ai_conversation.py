@@ -16,7 +16,7 @@ from sqlalchemy import select, update
 
 from app.config import settings
 from app.database import get_db
-from app.models import Campaign, Lead, CallLog, ConversationLog
+from app.models import Campaign, Lead, CallLog
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,30 @@ class ConversationContext:
     
 class AIConversationEngine:
     def __init__(self):
-        self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self.deepgram_client = Deepgram(settings.DEEPGRAM_API_KEY)
-        self.elevenlabs_client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+        # Initialize clients with error handling for development
+        try:
+            self.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        except Exception as e:
+            logger.warning(f"Anthropic client initialization failed: {e}")
+            self.anthropic_client = None
+            
+        try:
+            # Only initialize Deepgram if we have a valid API key
+            if settings.DEEPGRAM_API_KEY and settings.DEEPGRAM_API_KEY != "your_deepgram_key":
+                self.deepgram_client = Deepgram(settings.DEEPGRAM_API_KEY)
+            else:
+                self.deepgram_client = None
+                logger.warning("Deepgram client not initialized - invalid or missing API key")
+        except Exception as e:
+            logger.warning(f"Deepgram client initialization failed: {e}")
+            self.deepgram_client = None
+            
+        try:
+            self.elevenlabs_client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+        except Exception as e:
+            logger.warning(f"ElevenLabs client initialization failed: {e}")
+            self.elevenlabs_client = None
+            
         self.active_conversations: Dict[int, ConversationContext] = {}
         
     async def start_conversation(self, call_log_id: int) -> ConversationContext:
@@ -478,15 +499,9 @@ Sentiment Score: {context.sentiment_score}
     async def _log_conversation_turn(self, call_log_id: int, user_input: str, ai_response: str):
         """Log conversation turn to database"""
         try:
-            async with get_db() as db:
-                conversation_log = ConversationLog(
-                    call_log_id=call_log_id,
-                    user_input=user_input,
-                    ai_response=ai_response,
-                    timestamp=datetime.utcnow()
-                )
-                db.add(conversation_log)
-                await db.commit()
+            # For now, we'll just log to the application logs
+            # In the future, we can add a ConversationLog model
+            logger.info(f"Conversation turn - Call {call_log_id}: User: '{user_input}' -> AI: '{ai_response}'")
                 
         except Exception as e:
             logger.error(f"Error logging conversation turn: {e}")

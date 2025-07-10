@@ -1,0 +1,71 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+## AI Dialer Backend Implementation Plan
+
+> Follow each step **in order**. Mark **Done** with a two-line summary once completed.
+
+---
+
+### 1. Environment & Core Setup
+1.1 Configure Python virtual environment & dependencies (`requirements.txt`). **Done**
+   - All required dependencies are already configured in requirements.txt
+   - FastAPI, SQLAlchemy, Twilio, AI services, testing tools included
+1.2 Ensure `.env` template includes DB URL, Twilio, Deepgram, ElevenLabs, OpenAI keys. **Done**
+   - env.example contains all necessary environment variables
+   - Database, AI services, security, and monitoring configs included
+
+### 2. Database Layer
+2.1 Expand SQLAlchemy models: `Campaign`, `Lead`, `Call`, `DIDNumber`, `AnalyticsSnapshot`, `AgentTransfer`. **Done**
+   - All models are fully defined in app/models.py
+   - Complete schema with relationships and indexes
+2.2 Create Alembic migrations & initialise schema. **In Progress**
+   - Alembic configured and ready
+   - Need database connection to run migrations
+
+### 3. Repository / Service Abstractions
+3.1 Implement CRUD repositories for each model.
+3.2 Unit-test repositories with in-memory SQLite.
+
+### 4. Campaign Management API
+4.1 Endpoints: create, update, start/stop, list campaigns.
+4.2 Bulk lead upload (CSV/JSON).
+
+### 5. DID Management
+5.1 Purchase/release numbers via Twilio.
+5.2 Reputation checks & recycling.
+
+### 6. Call Orchestration
+6.1 `/calls/initiate` & `/calls/transfer` endpoints.
+6.2 Concurrency & retry orchestration.
+
+### 7. Media Streaming & AI Conversation
+7.1 Twilio media webhook → WebSocket relay.
+7.2 Transcription (Deepgram) + LLM + TTS loop.
+
+### 8. Analytics & Quality Scoring
+8.1 Real-time metrics aggregation.
+8.2 Post-call sentiment/keyword scoring.
+
+### 9. Cost Optimisation
+9.1 Monitor spend & adjust concurrency.
+
+### 10. Security & Compliance
+10.1 DNC scrubbing, safe calling hours validation.
+10.2 Rate limiting, auth, encryption at rest.
+
+### 11. Testing & CI
+11.1 Extend `test_ai_system.py` to full coverage.
+11.2 GitHub Actions: lint, type-check, tests.
+
+### 12. Deployment
+12.1 Docker Compose prod stack with health checks.
+12.2 AWS Fargate Terraform (optional).
+
+---
+
+> **Update this file after each step**.
+
+
