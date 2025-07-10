@@ -3,6 +3,9 @@ AI Dialer Main Application
 FastAPI application with Phase 3 optimization features.
 """
 
+from app.models import AgentPool, AgentNumber
+from app.services.number_pool_manager import number_pool_manager
+from app.services.agent_pool_manager import agent_pool_manager
 import logging
 import asyncio
 from contextlib import asynccontextmanager
@@ -10,10 +13,11 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import uuid
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status, Request, Form
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 import uvicorn
 
 from app.config import settings
@@ -25,7 +29,6 @@ from app.services.analytics_engine import get_analytics_engine
 from app.services.quality_scoring import get_quality_scoring_service
 from app.services.cost_optimization import get_cost_optimization_engine
 from app.services.aws_connect_integration import aws_connect_service
-from app.services.ai_conversation import ai_conversation_engine
 from app.services.aws_connect_media_handler import aws_connect_media_handler
 from app.services.call_orchestration import call_orchestration_service
 from app.services.did_management import did_management_service
@@ -41,6 +44,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Pydantic models for API requests/responses
+
+
 class CampaignCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -56,19 +61,24 @@ class CampaignCreate(BaseModel):
     ab_test_enabled: Optional[bool] = False
     ab_test_variants: Optional[Dict[str, Any]] = {}
 
+
 class LeadUpload(BaseModel):
     campaign_id: str
     leads: List[Dict[str, Any]]
+
 
 class DNCRequest(BaseModel):
     phone_numbers: Optional[List[str]] = None
     full_scrub: Optional[bool] = False
 
+
 class QualityEvaluationRequest(BaseModel):
     call_log_ids: List[str]
 
+
 class CostTrackingRequest(BaseModel):
     campaign_id: str
+
 
 class CallInitiateRequest(BaseModel):
     campaign_id: str
@@ -76,9 +86,11 @@ class CallInitiateRequest(BaseModel):
     priority: int = 1
     scheduled_time: Optional[datetime] = None
 
+
 class CallTransferRequest(BaseModel):
     call_log_id: str
     transfer_number: str
+
 
 class DIDInitializeRequest(BaseModel):
     campaign_id: str
@@ -86,31 +98,33 @@ class DIDInitializeRequest(BaseModel):
     count_per_area: int = 5
 
 # Lifespan context manager for startup/shutdown
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting AI Dialer application")
-    
+
     # Initialize services
     try:
         # Test database connection
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         logger.info("Database connection established")
-        
+
         # Start call orchestration service
         await call_orchestration_service.start_orchestration()
         logger.info("Call orchestration service started")
-        
+
     except Exception as e:
         logger.error(f"Startup failed: {e}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down AI Dialer application")
-    
+
     # Stop call orchestration service
     await call_orchestration_service.stop_orchestration()
     logger.info("Call orchestration service stopped")
@@ -123,6 +137,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Initialize templates
+templates = Jinja2Templates(directory="app/templates")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -133,6 +150,8 @@ app.add_middleware(
 )
 
 # Health check endpoint
+
+
 @app.get("/health", tags=["System"])
 async def health_check():
     """Health check endpoint."""
@@ -142,11 +161,24 @@ async def health_check():
         "version": "1.0.0"
     }
 
+# Admin Dashboard
+
+
+@app.get("/admin", response_class=HTMLResponse, tags=["Admin"])
+async def admin_dashboard(request: Request):
+    """Serve the admin dashboard interface."""
+    return templates.TemplateResponse(
+        "admin_dashboard.html", {
+            "request": request})
+
 # Campaign Management Endpoints
-@app.post("/campaigns", tags=["Campaign Management"], response_model=Dict[str, Any])
+
+
+@app.post("/campaigns", tags=["Campaign Management"],
+          response_model=Dict[str, Any])
 async def create_campaign(
     campaign_data: CampaignCreate,
-    campaign_service = Depends(get_campaign_management_service)
+    campaign_service=Depends(get_campaign_management_service)
 ):
     """Create a new campaign with optimization features."""
     try:
@@ -162,24 +194,26 @@ async def create_campaign(
         logger.error(f"Error creating campaign: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/campaigns/{campaign_id}/leads", tags=["Campaign Management"])
 async def upload_leads(
     campaign_id: str,
     leads_data: List[Dict[str, Any]],
     background_tasks: BackgroundTasks,
-    campaign_service = Depends(get_campaign_management_service),
-    dnc_service = Depends(get_dnc_scrubbing_service)
+    campaign_service=Depends(get_campaign_management_service),
+    dnc_service=Depends(get_dnc_scrubbing_service)
 ):
     """Upload leads to a campaign with DNC scrubbing."""
     try:
         # Upload leads
         results = await campaign_service.upload_leads(uuid.UUID(campaign_id), leads_data)
-        
+
         # Schedule DNC scrubbing in background
-        lead_phones = [lead.get('phone') for lead in leads_data if lead.get('phone')]
+        lead_phones = [lead.get('phone')
+                       for lead in leads_data if lead.get('phone')]
         if lead_phones:
             background_tasks.add_task(dnc_service.scrub_lead_list, lead_phones)
-        
+
         return {
             "success": True,
             "results": results
@@ -188,27 +222,32 @@ async def upload_leads(
         logger.error(f"Error uploading leads: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/campaigns/{campaign_id}/start", tags=["Campaign Management"])
 async def start_campaign(
     campaign_id: str,
-    campaign_service = Depends(get_campaign_management_service)
+    campaign_service=Depends(get_campaign_management_service)
 ):
     """Start a campaign after pre-flight checks."""
     try:
         success = await campaign_service.start_campaign(uuid.UUID(campaign_id))
         if success:
-            return {"success": True, "message": "Campaign started successfully"}
+            return {
+                "success": True,
+                "message": "Campaign started successfully"}
         else:
-            raise HTTPException(status_code=400, detail="Campaign failed pre-flight checks")
+            raise HTTPException(status_code=400,
+                                detail="Campaign failed pre-flight checks")
     except Exception as e:
         logger.error(f"Error starting campaign: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/campaigns/{campaign_id}/pause", tags=["Campaign Management"])
 async def pause_campaign(
     campaign_id: str,
     reason: Optional[str] = None,
-    campaign_service = Depends(get_campaign_management_service)
+    campaign_service=Depends(get_campaign_management_service)
 ):
     """Pause a campaign."""
     try:
@@ -216,15 +255,18 @@ async def pause_campaign(
         if success:
             return {"success": True, "message": "Campaign paused successfully"}
         else:
-            raise HTTPException(status_code=400, detail="Failed to pause campaign")
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to pause campaign")
     except Exception as e:
         logger.error(f"Error pausing campaign: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/campaigns/{campaign_id}/performance", tags=["Campaign Management"])
 async def get_campaign_performance(
     campaign_id: str,
-    campaign_service = Depends(get_campaign_management_service)
+    campaign_service=Depends(get_campaign_management_service)
 ):
     """Get comprehensive campaign performance metrics."""
     try:
@@ -234,16 +276,17 @@ async def get_campaign_performance(
         logger.error(f"Error getting campaign performance: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/campaigns", tags=["Campaign Management"])
 async def list_campaigns(
     status: Optional[str] = None,
-    campaign_service = Depends(get_campaign_management_service)
+    campaign_service=Depends(get_campaign_management_service)
 ):
     """List campaigns with optional status filter."""
     try:
         status_filter = CampaignStatus(status) if status else None
         campaigns = await campaign_service.list_campaigns(status_filter)
-        
+
         return {
             "campaigns": [
                 {
@@ -262,11 +305,13 @@ async def list_campaigns(
         raise HTTPException(status_code=400, detail=str(e))
 
 # DNC Scrubbing Endpoints
+
+
 @app.post("/dnc/scrub", tags=["DNC Compliance"])
 async def dnc_scrub(
     request: DNCRequest,
     background_tasks: BackgroundTasks,
-    dnc_service = Depends(get_dnc_scrubbing_service)
+    dnc_service=Depends(get_dnc_scrubbing_service)
 ):
     """Perform DNC scrubbing on phone numbers or full registry update."""
     try:
@@ -284,22 +329,25 @@ async def dnc_scrub(
             for phone in request.phone_numbers:
                 is_dnc, source = await dnc_service.check_phone_dnc_status(phone)
                 results[phone] = {"is_dnc": is_dnc, "source": source}
-            
+
             return {
                 "success": True,
                 "results": results
             }
         else:
-            raise HTTPException(status_code=400, detail="Must specify phone_numbers or full_scrub")
-            
+            raise HTTPException(
+                status_code=400,
+                detail="Must specify phone_numbers or full_scrub")
+
     except Exception as e:
         logger.error(f"Error in DNC scrub: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/dnc/suppress", tags=["DNC Compliance"])
 async def add_suppression_numbers(
     phone_numbers: List[str],
-    dnc_service = Depends(get_dnc_scrubbing_service)
+    dnc_service=Depends(get_dnc_scrubbing_service)
 ):
     """Add phone numbers to company suppression list."""
     try:
@@ -314,9 +362,11 @@ async def add_suppression_numbers(
         raise HTTPException(status_code=400, detail=str(e))
 
 # Analytics Endpoints
+
+
 @app.get("/analytics/dashboard", tags=["Analytics"])
 async def get_realtime_dashboard(
-    analytics_engine = Depends(get_analytics_engine)
+    analytics_engine=Depends(get_analytics_engine)
 ):
     """Get real-time dashboard metrics."""
     try:
@@ -326,11 +376,12 @@ async def get_realtime_dashboard(
         logger.error(f"Error getting dashboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/analytics/campaigns/{campaign_id}", tags=["Analytics"])
 async def get_campaign_analytics(
     campaign_id: str,
     days: int = 7,
-    analytics_engine = Depends(get_analytics_engine)
+    analytics_engine=Depends(get_analytics_engine)
 ):
     """Get comprehensive analytics for a specific campaign."""
     try:
@@ -340,10 +391,11 @@ async def get_campaign_analytics(
         logger.error(f"Error getting campaign analytics: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/analytics/predictions/{campaign_id}", tags=["Analytics"])
 async def get_predictive_insights(
     campaign_id: str,
-    analytics_engine = Depends(get_analytics_engine)
+    analytics_engine=Depends(get_analytics_engine)
 ):
     """Get predictive insights for campaign optimization."""
     try:
@@ -353,13 +405,14 @@ async def get_predictive_insights(
         logger.error(f"Error getting predictive insights: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/analytics/transfer-stats", tags=["Analytics"])
 async def get_transfer_statistics():
     """Get transfer success rate and statistics."""
     try:
         from app.services.call_orchestration import call_orchestration_service
         stats = await call_orchestration_service.get_transfer_statistics()
-        
+
         return {
             "success": True,
             "data": stats,
@@ -368,6 +421,7 @@ async def get_transfer_statistics():
     except Exception as e:
         logger.error(f"Error getting transfer statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/analytics/ai-performance", tags=["Analytics"])
 async def get_ai_performance_metrics():
@@ -381,7 +435,7 @@ async def get_ai_performance_metrics():
                 )
             )
             total_ai_calls = total_ai_calls.scalar()
-            
+
             # AI calls that successfully transferred
             ai_transfers = await db.execute(
                 select(func.count(CallLog.id)).where(
@@ -392,7 +446,7 @@ async def get_ai_performance_metrics():
                 )
             )
             ai_transfers = ai_transfers.scalar()
-            
+
             # Average AI conversation duration
             avg_ai_duration = await db.execute(
                 select(func.avg(CallLog.talk_time_seconds)).where(
@@ -400,7 +454,7 @@ async def get_ai_performance_metrics():
                 )
             )
             avg_ai_duration = avg_ai_duration.scalar() or 0
-            
+
             # Average AI response time
             avg_response_time = await db.execute(
                 select(func.avg(CallLog.ai_response_time_ms)).where(
@@ -408,10 +462,13 @@ async def get_ai_performance_metrics():
                 )
             )
             avg_response_time = avg_response_time.scalar() or 0
-            
+
             # AI efficiency metrics
-            ai_transfer_rate = (ai_transfers / total_ai_calls * 100) if total_ai_calls > 0 else 0
-            
+            ai_transfer_rate = (
+                ai_transfers /
+                total_ai_calls *
+                100) if total_ai_calls > 0 else 0
+
             return {
                 "success": True,
                 "data": {
@@ -428,33 +485,37 @@ async def get_ai_performance_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 # Quality Scoring Endpoints
+
+
 @app.post("/quality/evaluate", tags=["Quality Scoring"])
 async def evaluate_call_quality(
     request: QualityEvaluationRequest,
     background_tasks: BackgroundTasks,
-    quality_service = Depends(get_quality_scoring_service)
+    quality_service=Depends(get_quality_scoring_service)
 ):
     """Evaluate call quality for specified call logs."""
     try:
         call_log_ids = [uuid.UUID(id_str) for id_str in request.call_log_ids]
-        
+
         # Schedule batch evaluation in background
-        background_tasks.add_task(quality_service.batch_evaluate_quality, call_log_ids)
-        
+        background_tasks.add_task(
+            quality_service.batch_evaluate_quality,
+            call_log_ids)
+
         return {
             "success": True,
             "message": f"Quality evaluation scheduled for {len(call_log_ids)} calls",
-            "estimated_completion": "2-5 minutes"
-        }
+            "estimated_completion": "2-5 minutes"}
     except Exception as e:
         logger.error(f"Error scheduling quality evaluation: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.get("/quality/trends", tags=["Quality Scoring"])
 async def get_quality_trends(
     campaign_id: Optional[str] = None,
     days: int = 7,
-    quality_service = Depends(get_quality_scoring_service)
+    quality_service=Depends(get_quality_scoring_service)
 ):
     """Get quality trends and analytics."""
     try:
@@ -466,15 +527,17 @@ async def get_quality_trends(
         raise HTTPException(status_code=400, detail=str(e))
 
 # Cost Optimization Endpoints
+
+
 @app.post("/cost/track/{campaign_id}", tags=["Cost Optimization"])
 async def track_campaign_costs(
     campaign_id: str,
-    cost_engine = Depends(get_cost_optimization_engine)
+    cost_engine=Depends(get_cost_optimization_engine)
 ):
     """Track real-time costs for a campaign."""
     try:
         cost_metrics = await cost_engine.track_realtime_costs(uuid.UUID(campaign_id))
-        
+
         return {
             "success": True,
             "campaign_id": campaign_id,
@@ -493,11 +556,12 @@ async def track_campaign_costs(
         logger.error(f"Error tracking costs: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/cost/optimization/{campaign_id}", tags=["Cost Optimization"])
 async def get_cost_optimization_report(
     campaign_id: str,
     days: int = 7,
-    cost_engine = Depends(get_cost_optimization_engine)
+    cost_engine=Depends(get_cost_optimization_engine)
 ):
     """Get comprehensive cost optimization report."""
     try:
@@ -508,6 +572,8 @@ async def get_cost_optimization_report(
         raise HTTPException(status_code=400, detail=str(e))
 
 # AI Voice Calling Endpoints
+
+
 @app.post("/calls/initiate", tags=["AI Voice Calling"])
 async def initiate_call(
     request: CallInitiateRequest
@@ -521,7 +587,7 @@ async def initiate_call(
             request.priority,
             request.scheduled_time
         )
-        
+
         if success:
             return {"success": True, "message": "Call queued successfully"}
         else:
@@ -529,6 +595,7 @@ async def initiate_call(
     except Exception as e:
         logger.error(f"Error initiating call: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/calls/transfer", tags=["AI Voice Calling"])
 async def transfer_call(
@@ -545,6 +612,7 @@ async def transfer_call(
         logger.error(f"Error transferring call: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/calls/active", tags=["AI Voice Calling"])
 async def get_active_calls():
     """Get list of active calls."""
@@ -554,6 +622,7 @@ async def get_active_calls():
     except Exception as e:
         logger.error(f"Error getting active calls: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/calls/queue-status", tags=["AI Voice Calling"])
 async def get_queue_status():
@@ -565,6 +634,7 @@ async def get_queue_status():
         logger.error(f"Error getting queue status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/calls/{call_log_id}/cancel", tags=["AI Voice Calling"])
 async def cancel_call(call_log_id: str):
     """Cancel an active call."""
@@ -573,12 +643,16 @@ async def cancel_call(call_log_id: str):
         if success:
             return {"success": True, "message": "Call cancelled successfully"}
         else:
-            raise HTTPException(status_code=400, detail="Failed to cancel call")
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to cancel call")
     except Exception as e:
         logger.error(f"Error cancelling call: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 # DID Management Endpoints
+
+
 @app.post("/did/initialize", tags=["DID Management"])
 async def initialize_did_pool(
     request: DIDInitializeRequest
@@ -595,6 +669,7 @@ async def initialize_did_pool(
         logger.error(f"Error initializing DID pool: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/did/rotate/{campaign_id}", tags=["DID Management"])
 async def rotate_dids(campaign_id: str):
     """Rotate DIDs for a campaign."""
@@ -605,6 +680,7 @@ async def rotate_dids(campaign_id: str):
         logger.error(f"Error rotating DIDs: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/did/status/{campaign_id}", tags=["DID Management"])
 async def get_did_pool_status(campaign_id: str):
     """Get DID pool status for a campaign."""
@@ -614,6 +690,7 @@ async def get_did_pool_status(campaign_id: str):
     except Exception as e:
         logger.error(f"Error getting DID pool status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/did/health/{did_id}", tags=["DID Management"])
 async def analyze_did_health(did_id: str):
@@ -635,12 +712,16 @@ async def analyze_did_health(did_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # WebSocket endpoint for real-time media streaming
+
+
 @app.websocket("/ws/connect-media-stream/{call_log_id}")
 async def websocket_connect_media_stream(websocket, call_log_id: str):
     """WebSocket endpoint for AWS Connect media streaming."""
     await aws_connect_media_handler.handle_connect_media_stream(websocket, f"/ws/connect-media-stream/{call_log_id}")
 
 # AWS Connect Webhook Endpoints
+
+
 @app.post("/webhooks/aws-connect/contact-event", tags=["Webhooks"])
 async def handle_aws_connect_contact_event(event_data: Dict[str, Any]):
     """Handle AWS Connect contact events."""
@@ -651,36 +732,35 @@ async def handle_aws_connect_contact_event(event_data: Dict[str, Any]):
         logger.error(f"Error handling AWS Connect contact event: {e}")
         return {"status": "error", "message": str(e)}
 
+
 @app.post("/webhooks/aws-connect/transfer-event", tags=["Webhooks"])
 async def handle_aws_connect_transfer_event(event_data: Dict[str, Any]):
     """Handle AWS Connect transfer events."""
     try:
         contact_id = event_data.get("ContactId")
         event_type = event_data.get("EventType")
-        
+
         if event_type == "CONTACT_TRANSFERRED":
             # Handle successful transfer
             async with get_db() as db:
-                call_log_query = select(CallLog).where(CallLog.aws_contact_id == contact_id)
+                call_log_query = select(CallLog).where(
+                    CallLog.aws_contact_id == contact_id)
                 call_log = await db.execute(call_log_query)
                 call_log = call_log.scalar_one_or_none()
-                
+
                 if call_log:
                     call_log.call_status = 'transferred'
                     call_log.transfer_successful = True
                     await db.commit()
-                    
+
                     # Trigger AI disconnect
                     from app.services.call_orchestration import call_orchestration_service
                     await call_orchestration_service.handle_ai_disconnect(call_log.id)
-        
+
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error handling AWS Connect transfer event: {e}")
         return {"status": "error", "message": str(e)}
-
-
-
 
 
 # WebSocket endpoint for real-time updates
@@ -688,22 +768,24 @@ async def handle_aws_connect_transfer_event(event_data: Dict[str, Any]):
 async def websocket_dashboard(websocket):
     """WebSocket endpoint for real-time dashboard updates."""
     await websocket.accept()
-    
+
     try:
         while True:
             # TODO: Send real-time dashboard updates
             # TODO: Send cost alerts
             # TODO: Send quality alerts
             # TODO: Send DID health updates
-            
+
             await asyncio.sleep(5)  # Update every 5 seconds
-            
+
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
         await websocket.close()
 
 # Error handlers
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     return JSONResponse(
@@ -714,6 +796,7 @@ async def http_exception_handler(request, exc):
             "timestamp": datetime.utcnow().isoformat()
         }
     )
+
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
@@ -728,6 +811,8 @@ async def general_exception_handler(request, exc):
     )
 
 # AI Training endpoints
+
+
 @app.get("/ai-training/campaigns")
 async def get_training_campaigns():
     """Get campaigns available for AI training"""
@@ -738,7 +823,7 @@ async def get_training_campaigns():
             .where(Campaign.status == CampaignStatus.ACTIVE)
         )
         campaigns_data = campaigns.scalars().all()
-        
+
         return [
             {
                 "id": campaign.id,
@@ -750,6 +835,7 @@ async def get_training_campaigns():
             }
             for campaign in campaigns_data
         ]
+
 
 @app.get("/ai-training/conversation-flows/{campaign_id}")
 async def get_conversation_flows(campaign_id: str):
@@ -763,28 +849,34 @@ async def get_conversation_flows(campaign_id: str):
             .order_by(CallLog.call_start.desc())
             .limit(1000)
         )
-        
+
         call_data = call_logs.scalars().all()
-        
+
         # Analyze conversation patterns
         flows = []
-        success_calls = [call for call in call_data if call.call_disposition == 'qualified']
-        
-        flows.append({
-            "id": 1,
-            "name": "High-Success Pattern",
-            "success_rate": (len(success_calls) / len(call_data) * 100) if call_data else 0,
-            "calls_made": len(call_data),
-            "avg_duration": sum(call.call_duration or 0 for call in call_data) / len(call_data) if call_data else 0,
-            "pattern_analysis": {
-                "greeting_effectiveness": 85.2,
-                "qualification_rate": 42.3,
-                "objection_handling": 78.9,
-                "closing_success": 34.1
-            }
-        })
-        
+        success_calls = [
+            call for call in call_data if call.call_disposition == 'qualified']
+
+        flows.append(
+            {
+                "id": 1,
+                "name": "High-Success Pattern",
+                "success_rate": (
+                    len(success_calls) /
+                    len(call_data) *
+                    100) if call_data else 0,
+                "calls_made": len(call_data),
+                "avg_duration": sum(
+                    call.call_duration or 0 for call in call_data) /
+                len(call_data) if call_data else 0,
+                "pattern_analysis": {
+                    "greeting_effectiveness": 85.2,
+                    "qualification_rate": 42.3,
+                    "objection_handling": 78.9,
+                    "closing_success": 34.1}})
+
         return flows
+
 
 @app.post("/ai-training/conversation-flows/{campaign_id}")
 async def create_conversation_flow(campaign_id: str, flow_data: dict):
@@ -795,12 +887,15 @@ async def create_conversation_flow(campaign_id: str, flow_data: dict):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Update campaign with new conversation flow
         campaign.conversation_config = flow_data
         await db.commit()
-        
-        return {"message": "Conversation flow created successfully", "flow_id": flow_data.get("id")}
+
+        return {
+            "message": "Conversation flow created successfully",
+            "flow_id": flow_data.get("id")}
+
 
 @app.get("/ai-training/prompts/{campaign_id}")
 async def get_campaign_prompts(campaign_id: str):
@@ -809,7 +904,7 @@ async def get_campaign_prompts(campaign_id: str):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Return current prompt configuration
         return {
             "system_prompt": campaign.system_prompt or settings.CLAUDE_SYSTEM_PROMPT,
@@ -820,8 +915,8 @@ async def get_campaign_prompts(campaign_id: str):
             "closing_prompt": campaign.closing_prompt or "Close for next steps",
             "temperature": campaign.ai_temperature or 0.7,
             "max_tokens": campaign.ai_max_tokens or 200,
-            "response_length": campaign.ai_response_length or 30
-        }
+            "response_length": campaign.ai_response_length or 30}
+
 
 @app.put("/ai-training/prompts/{campaign_id}")
 async def update_campaign_prompts(campaign_id: str, prompt_data: dict):
@@ -830,7 +925,7 @@ async def update_campaign_prompts(campaign_id: str, prompt_data: dict):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Update prompt configuration
         campaign.system_prompt = prompt_data.get("system_prompt")
         campaign.greeting_prompt = prompt_data.get("greeting_prompt")
@@ -841,10 +936,11 @@ async def update_campaign_prompts(campaign_id: str, prompt_data: dict):
         campaign.ai_temperature = prompt_data.get("temperature", 0.7)
         campaign.ai_max_tokens = prompt_data.get("max_tokens", 200)
         campaign.ai_response_length = prompt_data.get("response_length", 30)
-        
+
         await db.commit()
-        
+
         return {"message": "Prompts updated successfully"}
+
 
 @app.get("/ai-training/voice-settings/{campaign_id}")
 async def get_voice_settings(campaign_id: str):
@@ -853,7 +949,7 @@ async def get_voice_settings(campaign_id: str):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         return {
             "voice_id": campaign.voice_id or "rachel",
             "voice_speed": campaign.voice_speed or 1.0,
@@ -862,6 +958,7 @@ async def get_voice_settings(campaign_id: str):
             "voice_model": campaign.voice_model or "eleven_turbo_v2"
         }
 
+
 @app.put("/ai-training/voice-settings/{campaign_id}")
 async def update_voice_settings(campaign_id: str, voice_data: dict):
     """Update voice settings for a campaign"""
@@ -869,16 +966,17 @@ async def update_voice_settings(campaign_id: str, voice_data: dict):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         campaign.voice_id = voice_data.get("voice_id", "rachel")
         campaign.voice_speed = voice_data.get("voice_speed", 1.0)
         campaign.voice_pitch = voice_data.get("voice_pitch", 1.0)
         campaign.voice_emphasis = voice_data.get("voice_emphasis", "medium")
         campaign.voice_model = voice_data.get("voice_model", "eleven_turbo_v2")
-        
+
         await db.commit()
-        
+
         return {"message": "Voice settings updated successfully"}
+
 
 @app.get("/ai-training/ab-tests/{campaign_id}")
 async def get_ab_tests(campaign_id: str):
@@ -887,7 +985,7 @@ async def get_ab_tests(campaign_id: str):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Get A/B test results from call logs
         call_logs = await db.execute(
             select(CallLog)
@@ -896,9 +994,9 @@ async def get_ab_tests(campaign_id: str):
             .order_by(CallLog.call_start.desc())
             .limit(1000)
         )
-        
+
         calls = call_logs.scalars().all()
-        
+
         # Mock A/B test data - in production, this would be real test results
         ab_tests = [
             {
@@ -911,7 +1009,7 @@ async def get_ab_tests(campaign_id: str):
                     "avg_duration": 125
                 },
                 "variant_b": {
-                    "name": "Consultative Approach", 
+                    "name": "Consultative Approach",
                     "calls": len(calls) // 2,
                     "success_rate": 31.2,
                     "avg_duration": 185
@@ -921,8 +1019,9 @@ async def get_ab_tests(campaign_id: str):
                 "winner": "variant_b"
             }
         ]
-        
+
         return ab_tests
+
 
 @app.post("/ai-training/ab-tests/{campaign_id}")
 async def create_ab_test(campaign_id: str, test_data: dict):
@@ -931,14 +1030,17 @@ async def create_ab_test(campaign_id: str, test_data: dict):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Store A/B test configuration
         campaign.ab_test_config = test_data
         campaign.ab_test_enabled = True
-        
+
         await db.commit()
-        
-        return {"message": "A/B test created successfully", "test_id": test_data.get("id")}
+
+        return {
+            "message": "A/B test created successfully",
+            "test_id": test_data.get("id")}
+
 
 @app.get("/ai-training/training-data/{campaign_id}")
 async def get_training_data(campaign_id: str):
@@ -952,9 +1054,9 @@ async def get_training_data(campaign_id: str):
             .order_by(CallLog.call_start.desc())
             .limit(500)
         )
-        
+
         success_data = successful_calls.scalars().all()
-        
+
         # Get objection handling examples
         objection_calls = await db.execute(
             select(CallLog)
@@ -964,35 +1066,40 @@ async def get_training_data(campaign_id: str):
             .order_by(CallLog.call_start.desc())
             .limit(300)
         )
-        
+
         objection_data = objection_calls.scalars().all()
-        
+
         # Get transfer examples
         transfer_calls = await db.execute(
             select(CallLog)
             .where(CallLog.campaign_id == campaign_id)
-            .where(CallLog.transfer_attempted == True)
-            .where(CallLog.transfer_successful == True)
+            .where(CallLog.transfer_attempted)
+            .where(CallLog.transfer_successful)
             .order_by(CallLog.call_start.desc())
             .limit(200)
         )
-        
+
         transfer_data = transfer_calls.scalars().all()
-        
+
         return {
             "high_converting_calls": {
                 "count": len(success_data),
-                "avg_success_rate": sum(1 for call in success_data if call.call_disposition == 'qualified') / len(success_data) * 100 if success_data else 0
-            },
+                "avg_success_rate": sum(
+                    1 for call in success_data if call.call_disposition == 'qualified') /
+                len(success_data) *
+                100 if success_data else 0},
             "objection_handling": {
                 "count": len(objection_data),
-                "avg_objections": sum(call.objections_count or 0 for call in objection_data) / len(objection_data) if objection_data else 0
-            },
+                "avg_objections": sum(
+                    call.objections_count or 0 for call in objection_data) /
+                len(objection_data) if objection_data else 0},
             "transfer_patterns": {
                 "count": len(transfer_data),
-                "success_rate": sum(1 for call in transfer_data if call.transfer_successful) / len(transfer_data) * 100 if transfer_data else 0
-            }
-        }
+                "success_rate": sum(
+                    1 for call in transfer_data if call.transfer_successful) /
+                len(transfer_data) *
+                100 if transfer_data else 0}}
+
 
 @app.post("/ai-training/start-training/{campaign_id}")
 async def start_ai_training(campaign_id: str, training_config: dict):
@@ -1001,20 +1108,21 @@ async def start_ai_training(campaign_id: str, training_config: dict):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Mark campaign as training
         campaign.training_status = "training"
         campaign.training_started_at = datetime.utcnow()
         campaign.training_config = training_config
-        
+
         await db.commit()
-        
+
         # In production, this would trigger actual AI training
         return {
             "message": "AI training started successfully",
             "training_id": str(uuid.uuid4()),
             "estimated_duration": "15-30 minutes"
         }
+
 
 @app.get("/ai-training/training-status/{campaign_id}")
 async def get_training_status(campaign_id: str):
@@ -1023,19 +1131,26 @@ async def get_training_status(campaign_id: str):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Mock training progress
         if campaign.training_status == "training":
-            progress = min(100, (datetime.utcnow() - campaign.training_started_at).seconds / 18)  # 18 seconds = 100%
+            progress = min(
+                100,
+                (datetime.utcnow() -
+                 campaign.training_started_at).seconds /
+                18)  # 18 seconds = 100%
         else:
             progress = 0
-        
+
         return {
             "status": campaign.training_status or "not_started",
             "progress": progress,
             "started_at": campaign.training_started_at.isoformat() if campaign.training_started_at else None,
-            "estimated_completion": (campaign.training_started_at + timedelta(minutes=20)).isoformat() if campaign.training_started_at else None
-        }
+            "estimated_completion": (
+                campaign.training_started_at +
+                timedelta(
+                    minutes=20)).isoformat() if campaign.training_started_at else None}
+
 
 @app.post("/ai-training/test-voice/{campaign_id}")
 async def test_voice_settings(campaign_id: str, voice_data: dict):
@@ -1044,16 +1159,19 @@ async def test_voice_settings(campaign_id: str, voice_data: dict):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Generate sample audio with voice settings
-        sample_text = voice_data.get("sample_text", "Hello, this is Sarah calling about your recent inquiry. How are you doing today?")
-        
+        # sample_text = voice_data.get(
+        #     "sample_text",
+        #     "Hello, this is Sarah calling about your recent inquiry. How are you doing today?")
+
         # In production, this would generate actual audio
         return {
             "message": "Voice test generated successfully",
             "sample_url": f"/audio/voice-test-{campaign_id}.wav",
             "settings_used": voice_data
         }
+
 
 @app.get("/ai-training/templates")
 async def get_conversation_templates():
@@ -1116,8 +1234,9 @@ async def get_conversation_templates():
             }
         }
     ]
-    
+
     return templates
+
 
 @app.post("/ai-training/deploy-template/{campaign_id}")
 async def deploy_conversation_template(campaign_id: str, template_data: dict):
@@ -1126,17 +1245,17 @@ async def deploy_conversation_template(campaign_id: str, template_data: dict):
         campaign = await db.get(Campaign, campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-        
+
         # Apply template to campaign
         template_id = template_data.get("template_id")
-        
+
         # Get template (this would be from database in production)
         templates = await get_conversation_templates()
         template = next((t for t in templates if t["id"] == template_id), None)
-        
+
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
-        
+
         # Update campaign with template prompts
         campaign.conversation_style = template["style"]
         campaign.greeting_prompt = template["prompts"]["greeting"]
@@ -1144,12 +1263,14 @@ async def deploy_conversation_template(campaign_id: str, template_data: dict):
         campaign.presentation_prompt = template["prompts"]["presentation"]
         campaign.objection_prompt = template["prompts"]["objection"]
         campaign.closing_prompt = template["prompts"]["closing"]
-        
+
         await db.commit()
-        
-        return {"message": f"Template '{template['name']}' deployed successfully"}
+
+        return {
+            "message": f"Template '{template['name']}' deployed successfully"}
 
 # Multi-Agent System API Endpoints
+
 
 @app.post("/api/agents/pools", response_model=dict)
 async def create_agent_pool(
@@ -1172,19 +1293,19 @@ async def create_agent_pool(
             "conversation_style": conversation_style,
             "response_timing": response_timing
         }
-        
+
         active_hours = {
             "start": active_start,
             "end": active_end,
             "timezone": timezone
         }
-        
+
         dialing_pattern = {
             "max_calls_per_hour": max_calls_per_hour,
             "rest_hours": rest_hours,
             "velocity": velocity
         }
-        
+
         agent_pool = await agent_pool_manager.create_agent_pool(
             name=name,
             region=region,
@@ -1192,13 +1313,13 @@ async def create_agent_pool(
             active_hours=active_hours,
             dialing_pattern=dialing_pattern
         )
-        
+
         return {
             "success": True,
             "agent_pool_id": str(agent_pool.id),
             "message": f"Agent pool '{name}' created successfully"
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to create agent pool: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1210,15 +1331,15 @@ async def get_agent_performance(agent_id: str):
     try:
         agent_uuid = UUID(agent_id)
         performance = await agent_pool_manager.get_agent_performance_summary(agent_uuid)
-        
+
         if not performance:
             raise HTTPException(status_code=404, detail="Agent not found")
-        
+
         return {
             "success": True,
             "performance": performance
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
     except Exception as e:
@@ -1235,25 +1356,26 @@ async def assign_numbers_to_agent(
     """Assign numbers to an agent"""
     try:
         agent_uuid = UUID(agent_id)
-        
+
         # Parse area codes
         preferred_area_codes = None
         if area_codes:
-            preferred_area_codes = [code.strip() for code in area_codes.split(',')]
-        
+            preferred_area_codes = [code.strip()
+                                    for code in area_codes.split(',')]
+
         assigned_numbers = await number_pool_manager.assign_numbers_to_agent(
             agent_id=agent_uuid,
             number_count=number_count,
             preferred_area_codes=preferred_area_codes
         )
-        
+
         return {
             "success": True,
             "assigned_numbers": len(assigned_numbers),
             "number_ids": [str(num_id) for num_id in assigned_numbers],
             "message": f"Assigned {len(assigned_numbers)} numbers to agent"
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
     except Exception as e:
@@ -1266,12 +1388,12 @@ async def get_pool_statistics():
     """Get comprehensive pool statistics"""
     try:
         statistics = await number_pool_manager.get_pool_statistics()
-        
+
         return {
             "success": True,
             "statistics": statistics
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get pool statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1283,15 +1405,15 @@ async def get_number_health(number_id: str):
     try:
         number_uuid = UUID(number_id)
         health_data = await number_pool_manager.monitor_number_health(number_uuid)
-        
+
         if not health_data:
             raise HTTPException(status_code=404, detail="Number not found")
-        
+
         return {
             "success": True,
             "health_data": health_data
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid number ID format")
     except Exception as e:
@@ -1304,14 +1426,14 @@ async def rotate_agent_numbers(agent_id: str):
     """Rotate numbers for an agent"""
     try:
         agent_uuid = UUID(agent_id)
-        
+
         await number_pool_manager.rotate_numbers_for_agent(agent_uuid)
-        
+
         return {
             "success": True,
             "message": "Numbers rotated successfully"
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
     except Exception as e:
@@ -1328,26 +1450,26 @@ async def get_optimal_agent_for_call(
     """Get optimal agent for a specific call"""
     try:
         campaign_uuid = UUID(campaign_id)
-        
+
         # Extract area code from phone number if not provided
         if not area_code and target_phone:
             if target_phone.startswith('+1') and len(target_phone) >= 5:
                 area_code = target_phone[2:5]
             elif len(target_phone) >= 3:
                 area_code = target_phone[:3]
-        
+
         optimal_agent = await agent_pool_manager.get_optimal_agent_for_call(
             target_phone=target_phone,
             campaign_id=campaign_uuid,
             area_code=area_code
         )
-        
+
         if not optimal_agent:
             return {
                 "success": False,
                 "message": "No available agents found for this call"
             }
-        
+
         return {
             "success": True,
             "agent": {
@@ -1358,9 +1480,11 @@ async def get_optimal_agent_for_call(
                 "answer_rate": optimal_agent.answer_rate
             }
         }
-        
+
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid campaign ID format")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid campaign ID format")
     except Exception as e:
         logger.error(f"Failed to get optimal agent: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1375,32 +1499,34 @@ async def get_optimal_number_for_call(
     """Get optimal number for a specific call"""
     try:
         agent_uuid = UUID(agent_id)
-        
+
         # Extract area code from phone number if not provided
         if not area_code and target_phone:
             if target_phone.startswith('+1') and len(target_phone) >= 5:
                 area_code = target_phone[2:5]
             elif len(target_phone) >= 3:
                 area_code = target_phone[:3]
-        
+
         optimal_number = await number_pool_manager.get_optimal_number_for_call(
             agent_id=agent_uuid,
             target_phone=target_phone,
             area_code=area_code
         )
-        
+
         if not optimal_number:
             return {
                 "success": False,
                 "message": "No available numbers found for this call"
             }
-        
+
         # Get number details
         async with AsyncSessionLocal() as session:
-            query = select(DIDPool.phone_number).where(DIDPool.id == optimal_number)
+            query = select(
+                DIDPool.phone_number).where(
+                DIDPool.id == optimal_number)
             result = await session.execute(query)
             phone_number = result.scalar()
-        
+
         return {
             "success": True,
             "number": {
@@ -1408,7 +1534,7 @@ async def get_optimal_number_for_call(
                 "phone_number": phone_number
             }
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
     except Exception as e:
@@ -1426,19 +1552,19 @@ async def complete_call_tracking(
     """Complete call tracking for agent performance"""
     try:
         agent_uuid = UUID(agent_id)
-        
+
         await agent_pool_manager.complete_call(
             agent_id=agent_uuid,
             call_successful=call_successful,
             call_answered=call_answered,
             call_duration=call_duration
         )
-        
+
         return {
             "success": True,
             "message": "Call tracking completed successfully"
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
     except Exception as e:
@@ -1451,10 +1577,10 @@ async def list_agent_pools():
     """List all agent pools"""
     try:
         async with AsyncSessionLocal() as session:
-            query = select(AgentPool).where(AgentPool.is_active == True)
+            query = select(AgentPool).where(AgentPool.is_active)
             result = await session.execute(query)
             agent_pools = result.scalars().all()
-            
+
             pools_data = []
             for pool in agent_pools:
                 pools_data.append({
@@ -1468,13 +1594,13 @@ async def list_agent_pools():
                     "created_at": pool.created_at.isoformat(),
                     "last_used_at": pool.last_used_at.isoformat() if pool.last_used_at else None
                 })
-            
+
             return {
                 "success": True,
                 "agent_pools": pools_data,
                 "total_count": len(pools_data)
             }
-        
+
     except Exception as e:
         logger.error(f"Failed to list agent pools: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1485,12 +1611,12 @@ async def initialize_number_pools():
     """Initialize number pools and assignments"""
     try:
         await number_pool_manager.initialize_number_pools()
-        
+
         return {
             "success": True,
             "message": "Number pools initialized successfully"
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize number pools: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1501,7 +1627,7 @@ async def activate_agent_pool(agent_id: str):
     """Activate an agent pool"""
     try:
         agent_uuid = UUID(agent_id)
-        
+
         async with AsyncSessionLocal() as session:
             update_query = update(AgentPool).where(
                 AgentPool.id == agent_uuid
@@ -1509,15 +1635,15 @@ async def activate_agent_pool(agent_id: str):
                 is_active=True,
                 updated_at=datetime.utcnow()
             )
-            
+
             await session.execute(update_query)
             await session.commit()
-        
+
         return {
             "success": True,
             "message": "Agent pool activated successfully"
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
     except Exception as e:
@@ -1530,7 +1656,7 @@ async def deactivate_agent_pool(agent_id: str):
     """Deactivate an agent pool"""
     try:
         agent_uuid = UUID(agent_id)
-        
+
         async with AsyncSessionLocal() as session:
             update_query = update(AgentPool).where(
                 AgentPool.id == agent_uuid
@@ -1538,15 +1664,15 @@ async def deactivate_agent_pool(agent_id: str):
                 is_active=False,
                 updated_at=datetime.utcnow()
             )
-            
+
             await session.execute(update_query)
             await session.commit()
-        
+
         return {
             "success": True,
             "message": "Agent pool deactivated successfully"
         }
-        
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
     except Exception as e:
@@ -1562,74 +1688,85 @@ async def get_multi_agent_dashboard():
         async with AsyncSessionLocal() as session:
             # Agent pool counts
             agent_counts_query = select(
-                func.count(AgentPool.id).label('total'),
-                func.sum(func.case((AgentPool.is_active == True, 1), else_=0)).label('active'),
-                func.sum(func.case((AgentPool.is_blocked == True, 1), else_=0)).label('blocked')
-            )
-            
+                func.count(
+                    AgentPool.id).label('total'), func.sum(
+                    func.case(
+                        (AgentPool.is_active, 1), else_=0)).label('active'), func.sum(
+                    func.case(
+                        (AgentPool.is_blocked, 1), else_=0)).label('blocked'))
+
             agent_counts = await session.execute(agent_counts_query)
             agent_stats = agent_counts.first()
-            
+
             # Number assignments
             number_assignments_query = select(
-                func.count(AgentNumber.id).label('total_assignments'),
-                func.sum(func.case((AgentNumber.is_blocked == False, 1), else_=0)).label('active_assignments'),
-                func.avg(AgentNumber.health_score).label('avg_health_score')
-            )
-            
+                func.count(
+                    AgentNumber.id).label('total_assignments'), func.sum(
+                    func.case(
+                        (AgentNumber.is_blocked == False, 1), else_=0)).label('active_assignments'), func.avg(
+                    AgentNumber.health_score).label('avg_health_score'))
+
             number_assignments = await session.execute(number_assignments_query)
             number_stats = number_assignments.first()
-            
+
             # Recent performance
             recent_calls_query = select(
-                func.count(CallLog.id).label('total_calls'),
-                func.sum(func.case((CallLog.call_answered == True, 1), else_=0)).label('answered_calls'),
-                func.sum(func.case((CallLog.call_status == 'completed', 1), else_=0)).label('successful_calls'),
-                func.avg(CallLog.call_duration).label('avg_duration')
-            ).where(
-                CallLog.created_at >= datetime.utcnow() - timedelta(hours=24)
-            )
-            
+                func.count(
+                    CallLog.id).label('total_calls'),
+                func.sum(
+                    func.case(
+                        (CallLog.call_answered,
+                         1),
+                        else_=0)).label('answered_calls'),
+                func.sum(
+                    func.case(
+                        (CallLog.call_status == 'completed',
+                         1),
+                        else_=0)).label('successful_calls'),
+                func.avg(
+                            CallLog.call_duration).label('avg_duration')).where(
+                                CallLog.created_at >= datetime.utcnow() -
+                                timedelta(
+                                    hours=24))
+
             recent_calls = await session.execute(recent_calls_query)
             call_stats = recent_calls.first()
-        
+
         # Get pool statistics
         pool_stats = await number_pool_manager.get_pool_statistics()
-        
+
         return {
             "success": True,
             "dashboard": {
                 "agent_pools": {
                     "total": agent_stats.total or 0,
                     "active": agent_stats.active or 0,
-                    "blocked": agent_stats.blocked or 0
-                },
+                    "blocked": agent_stats.blocked or 0},
                 "number_assignments": {
                     "total_assignments": number_stats.total_assignments or 0,
                     "active_assignments": number_stats.active_assignments or 0,
-                    "average_health_score": float(number_stats.avg_health_score) if number_stats.avg_health_score else 0.0
-                },
+                    "average_health_score": float(
+                        number_stats.avg_health_score) if number_stats.avg_health_score else 0.0},
                 "recent_performance": {
                     "total_calls_24h": call_stats.total_calls or 0,
                     "answered_calls_24h": call_stats.answered_calls or 0,
                     "successful_calls_24h": call_stats.successful_calls or 0,
-                    "answer_rate_24h": (call_stats.answered_calls / call_stats.total_calls) if call_stats.total_calls > 0 else 0,
-                    "success_rate_24h": (call_stats.successful_calls / call_stats.total_calls) if call_stats.total_calls > 0 else 0,
-                    "avg_duration_24h": float(call_stats.avg_duration) if call_stats.avg_duration else 0.0
-                },
-                "pool_statistics": pool_stats
-            }
-        }
-        
+                    "answer_rate_24h": (
+                        call_stats.answered_calls /
+                        call_stats.total_calls) if call_stats.total_calls > 0 else 0,
+                    "success_rate_24h": (
+                        call_stats.successful_calls /
+                        call_stats.total_calls) if call_stats.total_calls > 0 else 0,
+                    "avg_duration_24h": float(
+                        call_stats.avg_duration) if call_stats.avg_duration else 0.0},
+                "pool_statistics": pool_stats}}
+
     except Exception as e:
         logger.error(f"Failed to get multi-agent dashboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # Add imports at the top of the file
-from app.services.agent_pool_manager import agent_pool_manager
-from app.services.number_pool_manager import number_pool_manager
-from app.models import AgentPool, AgentNumber
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -1638,4 +1775,4 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.debug,
         log_level=settings.log_level.lower()
-    ) 
+    )

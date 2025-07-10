@@ -1,8 +1,6 @@
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from app.config import settings
 
@@ -25,6 +23,8 @@ AsyncSessionLocal = sessionmaker(
 Base = declarative_base()
 
 # Dependency for getting database session
+
+
 async def get_db():
     async with AsyncSessionLocal() as session:
         try:
@@ -33,4 +33,4 @@ async def get_db():
             await session.close()
 
 # Create metadata
-metadata = MetaData() 
+metadata = MetaData()

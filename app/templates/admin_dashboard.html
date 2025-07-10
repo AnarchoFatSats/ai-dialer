@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Dialer Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <h1 class="text-xl font-semibold text-gray-900">AI Dialer Admin Dashboard</h1>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-sm text-gray-500">System Status: <span class="inline-block w-2 h-2 bg-green-500 rounded-full"></span>Online</div>
+                        <button class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600" onclick="refreshDashboard()">
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="bg-gray-800 text-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex space-x-8">
+                    <a href="#campaigns" class="nav-link px-3 py-4 text-sm font-medium hover:bg-gray-700 border-b-2 border-blue-500">Campaigns</a>
+                    <a href="#agents" class="nav-link px-3 py-4 text-sm font-medium hover:bg-gray-700 border-b-2 border-transparent">Agent Pools</a>
+                    <a href="#numbers" class="nav-link px-3 py-4 text-sm font-medium hover:bg-gray-700 border-b-2 border-transparent">Number Pools</a>
+                    <a href="#settings" class="nav-link px-3 py-4 text-sm font-medium hover:bg-gray-700 border-b-2 border-transparent">Settings</a>
+                    <a href="#monitoring" class="nav-link px-3 py-4 text-sm font-medium hover:bg-gray-700 border-b-2 border-transparent">Monitoring</a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Campaign Management Tab -->
+            <div id="campaigns" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Campaign Overview</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span>Active Campaigns:</span>
+                                <span id="active-campaigns" class="font-semibold text-green-600">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Total Calls Today:</span>
+                                <span id="total-calls" class="font-semibold text-blue-600">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Success Rate:</span>
+                                <span id="success-rate" class="font-semibold text-purple-600">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+                        <div class="space-y-3">
+                            <button class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600" onclick="createCampaign()">
+                                Create New Campaign
+                            </button>
+                            <button class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600" onclick="pauseAllCampaigns()">
+                                Pause All Campaigns
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">System Controls</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span>Auto-Dialing:</span>
+                                <input type="checkbox" id="auto-dialing" checked class="toggle-checkbox">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>DNC Scrubbing:</span>
+                                <input type="checkbox" id="dnc-scrubbing" checked class="toggle-checkbox">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaign Table -->
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900">Active Campaigns</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Calls</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="campaigns-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Dynamic content will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agent Pools Tab -->
+            <div id="agents" class="tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Agent Pool Overview</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span>Total Agents:</span>
+                                <span id="total-agents" class="font-semibold text-green-600">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Active Agents:</span>
+                                <span id="active-agents" class="font-semibold text-blue-600">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Create Agent Pool</h3>
+                        <form id="agent-form" class="space-y-3">
+                            <input type="text" id="agent-name" placeholder="Agent Name" class="w-full p-2 border border-gray-300 rounded-md">
+                            <select id="agent-region" class="w-full p-2 border border-gray-300 rounded-md">
+                                <option value="">Select Region</option>
+                                <option value="us-east-1">US East</option>
+                                <option value="us-west-2">US West</option>
+                            </select>
+                            <button type="submit" class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600">
+                                Create Agent Pool
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Agent Controls</h3>
+                        <div class="space-y-3">
+                            <button class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600" onclick="optimizeAgentPools()">
+                                Optimize Performance
+                            </button>
+                            <button class="w-full bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600" onclick="rotateAllNumbers()">
+                                Rotate All Numbers
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent Table -->
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900">Agent Pools</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Numbers</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performance</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agents-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Dynamic content will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Number Pools Tab -->
+            <div id="numbers" class="tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Number Pool Statistics</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span>Total Numbers:</span>
+                                <span id="total-numbers" class="font-semibold text-green-600">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Available Numbers:</span>
+                                <span id="available-numbers" class="font-semibold text-blue-600">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Number Controls</h3>
+                        <div class="space-y-3">
+                            <button class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600" onclick="initializeNumberPools()">
+                                Initialize Number Pools
+                            </button>
+                            <button class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600" onclick="checkNumberHealth()">
+                                Check Number Health
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settings" class="tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">System Settings</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Max Concurrent Calls</label>
+                                <input type="number" id="max-concurrent-calls" value="100" class="w-full p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Max Daily Budget ($)</label>
+                                <input type="number" id="max-daily-budget" value="1000" class="w-full p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <button class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600" onclick="saveSettings()">
+                                Save Settings
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">AI Configuration</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Claude Model</label>
+                                <select id="claude-model" class="w-full p-2 border border-gray-300 rounded-md">
+                                    <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                                    <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Max Response Time (ms)</label>
+                                <input type="number" id="max-response-time" value="800" class="w-full p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <button class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600" onclick="saveAISettings()">
+                                Save AI Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monitoring Tab -->
+            <div id="monitoring" class="tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Real-time Metrics</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span>Active Calls:</span>
+                                <span id="active-calls-count" class="font-semibold text-green-600">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Calls/Minute:</span>
+                                <span id="calls-per-minute" class="font-semibold text-blue-600">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Performance Metrics</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span>Connection Rate:</span>
+                                <span id="connection-rate" class="font-semibold text-blue-600">0%</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Transfer Rate:</span>
+                                <span id="transfer-rate" class="font-semibold text-purple-600">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Cost Metrics</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span>Daily Cost:</span>
+                                <span id="daily-cost" class="font-semibold text-green-600">$0.00</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Budget Remaining:</span>
+                                <span id="budget-remaining" class="font-semibold text-purple-600">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Real-time Chart -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Real-time Call Volume</h3>
+                    <canvas id="realTimeChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Initialize dashboard
+        $(document).ready(function() {
+            initializeDashboard();
+            setupEventListeners();
+            startRealTimeUpdates();
+        });
+
+        // Tab switching
+        $('.nav-link').click(function(e) {
+            e.preventDefault();
+            const target = $(this).attr('href');
+            
+            $('.nav-link').removeClass('border-blue-500').addClass('border-transparent');
+            $(this).removeClass('border-transparent').addClass('border-blue-500');
+            
+            $('.tab-content').addClass('hidden');
+            $(target).removeClass('hidden');
+        });
+
+        // Dashboard functions
+        function initializeDashboard() {
+            loadCampaigns();
+            loadAgents();
+            loadNumberPools();
+            initializeCharts();
+        }
+
+        function refreshDashboard() {
+            updateOverviewStats();
+            loadCampaigns();
+            loadAgents();
+            loadNumberPools();
+        }
+
+        function updateOverviewStats() {
+            $.get('/api/multi-agent/dashboard', function(data) {
+                $('#active-campaigns').text(data.campaigns?.active || 0);
+                $('#total-calls').text(data.calls?.total_today || 0);
+                $('#success-rate').text((data.calls?.success_rate || 0) + '%');
+                $('#total-agents').text(data.agents?.total || 0);
+                $('#active-agents').text(data.agents?.active || 0);
+            }).fail(function() {
+                // Handle error gracefully
+                $('#active-campaigns').text('--');
+                $('#total-calls').text('--');
+                $('#success-rate').text('--');
+            });
+        }
+
+        function loadCampaigns() {
+            $.get('/campaigns', function(data) {
+                const tbody = $('#campaigns-table');
+                tbody.empty();
+                
+                if (data.campaigns) {
+                    data.campaigns.forEach(function(campaign) {
+                        const statusClass = campaign.status === 'active' ? 'text-green-600' : 'text-red-600';
+                        const row = `
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${campaign.name}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm ${statusClass}">${campaign.status}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${campaign.total_leads || 0}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${campaign.success_rate || 0}%</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <button class="text-blue-600 hover:text-blue-900 mr-2" onclick="manageCampaign('${campaign.id}')">Manage</button>
+                                    <button class="text-red-600 hover:text-red-900" onclick="pauseCampaign('${campaign.id}')">Pause</button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.append(row);
+                    });
+                }
+            }).fail(function() {
+                $('#campaigns-table').html('<tr><td colspan="5" class="text-center py-4">Error loading campaigns</td></tr>');
+            });
+        }
+
+        function loadAgents() {
+            $.get('/api/agents/pools', function(data) {
+                const tbody = $('#agents-table');
+                tbody.empty();
+                
+                if (data.agents) {
+                    data.agents.forEach(function(agent) {
+                        const statusClass = agent.is_active ? 'text-green-600' : 'text-red-600';
+                        const row = `
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${agent.name}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm ${statusClass}">${agent.is_active ? 'Active' : 'Inactive'}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${agent.assigned_numbers || 0}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${agent.success_rate || 0}%</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <button class="text-blue-600 hover:text-blue-900 mr-2" onclick="manageAgent('${agent.id}')">Manage</button>
+                                    <button class="text-yellow-600 hover:text-yellow-900" onclick="rotateAgentNumbers('${agent.id}')">Rotate</button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.append(row);
+                    });
+                }
+            }).fail(function() {
+                $('#agents-table').html('<tr><td colspan="5" class="text-center py-4">Error loading agents</td></tr>');
+            });
+        }
+
+        function loadNumberPools() {
+            $.get('/api/numbers/pools/statistics', function(data) {
+                $('#total-numbers').text(data.total_numbers || 0);
+                $('#available-numbers').text(data.available_numbers || 0);
+            }).fail(function() {
+                $('#total-numbers').text('--');
+                $('#available-numbers').text('--');
+            });
+        }
+
+        function setupEventListeners() {
+            // Agent form submission
+            $('#agent-form').submit(function(e) {
+                e.preventDefault();
+                submitAgent();
+            });
+
+            // Toggle switches
+            $('.toggle-checkbox').change(function() {
+                const setting = $(this).attr('id');
+                const enabled = $(this).is(':checked');
+                updateSystemSetting(setting, enabled);
+            });
+        }
+
+        function submitAgent() {
+            const formData = new FormData();
+            formData.append('name', $('#agent-name').val());
+            formData.append('region', $('#agent-region').val());
+            formData.append('voice_type', 'professional');
+            formData.append('conversation_style', 'professional');
+            formData.append('response_timing', 'moderate');
+            formData.append('active_start', '08:00');
+            formData.append('active_end', '18:00');
+            formData.append('timezone', 'America/New_York');
+
+            $.ajax({
+                url: '/api/agents/pools',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    alert('Agent pool created successfully!');
+                    $('#agent-form')[0].reset();
+                    loadAgents();
+                },
+                error: function(xhr) {
+                    alert('Error creating agent pool');
+                }
+            });
+        }
+
+        function createCampaign() {
+            const name = prompt('Enter campaign name:');
+            if (name) {
+                const data = {
+                    name: name,
+                    script_template: 'Default script template'
+                };
+
+                $.ajax({
+                    url: '/campaigns',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: function(response) {
+                        alert('Campaign created successfully!');
+                        loadCampaigns();
+                    },
+                    error: function(xhr) {
+                        alert('Error creating campaign');
+                    }
+                });
+            }
+        }
+
+        function pauseCampaign(campaignId) {
+            if (confirm('Are you sure you want to pause this campaign?')) {
+                $.post(`/campaigns/${campaignId}/pause`, function(response) {
+                    alert('Campaign paused successfully!');
+                    loadCampaigns();
+                });
+            }
+        }
+
+        function pauseAllCampaigns() {
+            if (confirm('Are you sure you want to pause ALL campaigns?')) {
+                alert('All campaigns pause functionality to be implemented');
+            }
+        }
+
+        function initializeNumberPools() {
+            $.post('/api/numbers/pools/initialize', function(response) {
+                alert('Number pools initialized successfully!');
+                loadNumberPools();
+            }).fail(function() {
+                alert('Error initializing number pools');
+            });
+        }
+
+        function rotateAgentNumbers(agentId) {
+            $.post(`/api/agents/pools/${agentId}/numbers/rotate`, function(response) {
+                alert('Agent numbers rotated successfully!');
+                loadAgents();
+            }).fail(function() {
+                alert('Error rotating agent numbers');
+            });
+        }
+
+        function rotateAllNumbers() {
+            if (confirm('This will rotate numbers for all agents. Continue?')) {
+                alert('Rotate all numbers functionality to be implemented');
+            }
+        }
+
+        function optimizeAgentPools() {
+            if (confirm('This will optimize agent pool performance. Continue?')) {
+                alert('Agent pool optimization functionality to be implemented');
+            }
+        }
+
+        function checkNumberHealth() {
+            alert('Number health check started!');
+        }
+
+        function updateSystemSetting(setting, value) {
+            console.log(`Updating ${setting} to ${value}`);
+            // Implementation for system settings updates
+        }
+
+        function saveSettings() {
+            const settings = {
+                max_concurrent_calls: $('#max-concurrent-calls').val(),
+                max_daily_budget: $('#max-daily-budget').val()
+            };
+            
+            alert('System settings saved successfully!');
+            console.log('Saving settings:', settings);
+        }
+
+        function saveAISettings() {
+            const settings = {
+                claude_model: $('#claude-model').val(),
+                max_response_time: $('#max-response-time').val()
+            };
+            
+            alert('AI settings saved successfully!');
+            console.log('Saving AI settings:', settings);
+        }
+
+        function startRealTimeUpdates() {
+            setInterval(function() {
+                updateOverviewStats();
+                updateRealTimeMetrics();
+            }, 10000); // Update every 10 seconds
+        }
+
+        function updateRealTimeMetrics() {
+            // Simulate real-time metrics
+            $('#active-calls-count').text(Math.floor(Math.random() * 50));
+            $('#calls-per-minute').text(Math.floor(Math.random() * 10));
+            $('#connection-rate').text(Math.floor(Math.random() * 50 + 30) + '%');
+            $('#transfer-rate').text(Math.floor(Math.random() * 20 + 10) + '%');
+            $('#daily-cost').text('$' + (Math.random() * 100).toFixed(2));
+            $('#budget-remaining').text('$' + (Math.random() * 900 + 100).toFixed(2));
+        }
+
+        function initializeCharts() {
+            const ctx = document.getElementById('realTimeChart').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Active Calls',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Real-time Call Activity'
+                        }
+                    }
+                }
+            });
+        }
+
+        function manageCampaign(campaignId) {
+            alert('Campaign management interface to be implemented');
+        }
+
+        function manageAgent(agentId) {
+            alert('Agent management interface to be implemented');
+        }
+    </script>
+</body>
+</html> 

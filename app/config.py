@@ -1,169 +1,171 @@
 from pydantic_settings import BaseSettings
-from typing import Optional, List
-import os
+from typing import Optional
+
 
 class Settings(BaseSettings):
     """Application configuration settings."""
-    
+
     # Environment
     environment: str = "development"
     debug: bool = True
-    
+
     # Database
     database_url: str = "postgresql://postgres:password@localhost:5432/aidialer"
     redis_url: str = "redis://localhost:6379"
-    
+
     # AWS Connect Configuration
-    aws_connect_instance_id: Optional[str] = None
-    aws_connect_instance_arn: Optional[str] = None
-    aws_connect_contact_flow_id: Optional[str] = None
-    aws_connect_queue_id: Optional[str] = None
+    aws_connect_instance_id: str = "placeholder-instance-id"
+    aws_connect_instance_arn: str = "arn:aws:connect:us-east-1:123456789012:instance/placeholder-instance-id"
+    aws_connect_contact_flow_id: str = "placeholder-contact-flow-id"
+    aws_connect_queue_id: str = "placeholder-queue-id"
     webhook_base_url: str = "https://your-domain.com"
-    
+
     # AI Services
-    anthropic_api_key: str
-    deepgram_api_key: str
-    elevenlabs_api_key: str
-    elevenlabs_voice_id: str = "pNInz6obpgDQGcFmaJgB"  # Default voice ID (Adam)
+    anthropic_api_key: str = "placeholder-anthropic-key"
+    deepgram_api_key: str = "placeholder-deepgram-key"
+    elevenlabs_api_key: str = "placeholder-elevenlabs-key"
+    # Default voice ID (Adam)
+    elevenlabs_voice_id: str = "pNInz6obpgDQGcFmaJgB"
     openai_api_key: Optional[str] = None
-    
+
     # AI Configuration
     claude_model: str = "claude-3-haiku-20240307"
     deepgram_model: str = "nova-2"
     elevenlabs_model: str = "eleven_turbo_v2"
     max_ai_response_time_ms: int = 800
     ai_conversation_timeout_seconds: int = 300
-    
+
     # Voice & Audio Settings
     audio_sample_rate: int = 8000
     audio_format: str = "mulaw"
     max_audio_chunk_size: int = 8000
     speech_detection_threshold: float = 0.7
-    
+
     # Reputation & Compliance
-    numeracle_api_key: str
+    numeracle_api_key: str = "placeholder-numeracle-key"
     free_caller_registry_api_key: Optional[str] = None
-    dnc_registry_username: str
-    dnc_registry_password: str
-    
+    dnc_registry_username: str = "placeholder-dnc-username"
+    dnc_registry_password: str = "placeholder-dnc-password"
+
     # Cost Optimization
     max_cost_per_minute: float = 0.025
     max_daily_budget: float = 1000.00
     cost_alert_threshold: float = 0.80
-    
+
     # Campaign Settings
     max_concurrent_calls: int = 1000
     default_retry_attempts: int = 3
     call_timeout_seconds: int = 30
     max_calls_per_did_daily: int = 150
     max_talk_time_per_did_daily: int = 1200
-    
+
     # DID Management
     did_pool_multiplier: float = 1.3
     did_rotation_cooldown_hours: int = 24
     spam_score_threshold: int = 85
     yellow_score_threshold: int = 70
-    
+
     # Analytics & Monitoring
     prometheus_gateway_url: str = "http://localhost:9091"
     grafana_url: str = "http://localhost:3000"
     sentry_dsn: Optional[str] = None
-    
+
     # Security
-    jwt_secret_key: str
-    webhook_verification_token: str
-    encryption_key: str
-    
+    jwt_secret_key: str = "placeholder-jwt-secret-key-change-in-production"
+    webhook_verification_token: str = "placeholder-webhook-token"
+    encryption_key: str = "placeholder-encryption-key-change-in-production"
+
     # AWS (if using cloud services)
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     aws_region: str = "us-east-1"
     s3_bucket_name: Optional[str] = None
-    
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"
-    
+
     # Quality Scoring
     min_call_quality_score: float = 3.0  # MOS score
     max_acceptable_jitter: float = 30.0  # milliseconds
     max_acceptable_packet_loss: float = 1.0  # percentage
-    
+
     # TCPA Compliance
     tcpa_safe_hours_start: int = 8  # 8 AM
     tcpa_safe_hours_end: int = 21   # 9 PM
     max_call_attempts_per_lead: int = 3
     dnc_scrub_frequency_hours: int = 24
-    
+
     # Advanced Features
     enable_ab_testing: bool = True
     enable_predictive_scoring: bool = True
     enable_real_time_optimization: bool = True
     enable_voice_analytics: bool = True
-    
+
     # System Configuration
     base_url: str = "https://your-domain.com"
     domain: str = "your-domain.com"
     spam_check_api_key: Optional[str] = None
-    
+
     @property
     def AWS_CONNECT_INSTANCE_ID(self) -> Optional[str]:
         return self.aws_connect_instance_id
-    
+
     @property
     def AWS_CONNECT_INSTANCE_ARN(self) -> Optional[str]:
         return self.aws_connect_instance_arn
-    
+
     @property
     def AWS_CONNECT_CONTACT_FLOW_ID(self) -> Optional[str]:
         return self.aws_connect_contact_flow_id
-    
+
     @property
     def AWS_CONNECT_QUEUE_ID(self) -> Optional[str]:
         return self.aws_connect_queue_id
-    
+
     @property
     def BASE_URL(self) -> str:
         return self.base_url
-    
+
     @property
     def DOMAIN(self) -> str:
         return self.domain
-    
+
     @property
     def ANTHROPIC_API_KEY(self) -> str:
         return self.anthropic_api_key
-    
+
     @property
     def DEEPGRAM_API_KEY(self) -> str:
         return self.deepgram_api_key
-    
+
     @property
     def ELEVENLABS_API_KEY(self) -> str:
         return self.elevenlabs_api_key
-    
+
     @property
     def ELEVENLABS_VOICE_ID(self) -> str:
         return self.elevenlabs_voice_id
-    
+
     @property
     def MAX_CONCURRENT_CALLS(self) -> int:
         return self.max_concurrent_calls
-    
+
     @property
     def SPAM_CHECK_API_KEY(self) -> Optional[str]:
         return self.spam_check_api_key
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = False
+
 
 # Create global settings instance
 settings = Settings()
 
 # AWS Connect Configuration
 AWS_CONNECT_WEBHOOK_EVENTS = [
-    "CONTACT_FLOW_STARTED", "CONTACT_FLOW_ENDED", "CONTACT_CONNECTED", 
+    "CONTACT_FLOW_STARTED", "CONTACT_FLOW_ENDED", "CONTACT_CONNECTED",
     "CONTACT_DISCONNECTED", "CONTACT_TRANSFERRED", "CONTACT_QUEUED"
 ]
 
@@ -235,4 +237,4 @@ AREA_CODE_MAPPING = {
     "773": {"state": "IL", "city": "Chicago", "timezone": "America/Chicago"},
     "818": {"state": "CA", "city": "Los Angeles", "timezone": "America/Los_Angeles"},
     "954": {"state": "FL", "city": "Fort Lauderdale", "timezone": "America/New_York"},
-} 
+}
