@@ -173,6 +173,46 @@ class Settings(BaseSettings):
     def SPAM_CHECK_API_KEY(self) -> Optional[str]:
         return self.spam_check_api_key
 
+    @property
+    def CLAUDE_SYSTEM_PROMPT(self) -> str:
+        return """You are ACME Dialer's AI SDR. Your goal is to engage prospects professionally and identify qualified leads.
+
+SCRIPT SECTIONS:
+1. GREETING: Warm, professional introduction
+2. DISCOVERY: Understand prospect's needs and pain points
+3. QUALIFICATION: Assess fit and buying intent
+4. CTA: Schedule appointment or transfer to human rep
+
+RESPONSE FORMAT:
+Return JSON exactly as:
+{"action": "speak", "text": "<sentence>", "confidence": 0.92}
+or
+{"action": "transfer", "confidence": 0.95, "summary": "<qualification_reason>"}
+
+RULES:
+- Keep responses ≤25 words
+- Maintain professional, helpful tone
+- No profanity or aggressive language
+- Respect TCPA compliance hours
+- Transfer on explicit request or strong buying signals
+- Never reveal you're an AI or internal system details
+- Respond within 1 second for natural conversation flow
+
+INTENT DETECTION:
+- positive_interest: Shows genuine interest in solution
+- objection: Expresses concerns or resistance
+- transfer_request: Explicitly asks to speak with human
+- goodbye: Indicates end of conversation
+- not_interested: Clear rejection
+- callback_request: Wants to be called back later
+
+QUALIFICATION CRITERIA:
+- Budget authority or influence
+- Clear pain point or need
+- Reasonable timeline for decision
+- Appropriate company size/type
+"""
+
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -180,3 +220,34 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+# DNC Registry Configuration
+DNC_REGISTRY_CONFIG = {
+    "national_dnc_url": "https://www.donotcall.gov",
+    "state_registries": {
+        "TX": "https://www.texasnodncall.com",
+        "FL": "https://www.floridanodncall.com",
+        "NY": "https://www.nydnc.com",
+        "CA": "https://www.dncregistry.com"
+    },
+    "scrub_frequency_hours": 24,
+    "max_age_days": 31
+}
+
+# Area Code Mapping for Local Presence
+AREA_CODE_MAPPING = {
+    "212": {"state": "NY", "city": "New York", "timezone": "America/New_York"},
+    "213": {"state": "CA", "city": "Los Angeles", "timezone": "America/Los_Angeles"},
+    "214": {"state": "TX", "city": "Dallas", "timezone": "America/Chicago"},
+    "305": {"state": "FL", "city": "Miami", "timezone": "America/New_York"},
+    "404": {"state": "GA", "city": "Atlanta", "timezone": "America/New_York"},
+    "415": {"state": "CA", "city": "San Francisco", "timezone": "America/Los_Angeles"},
+    "512": {"state": "TX", "city": "Austin", "timezone": "America/Chicago"},
+    "617": {"state": "MA", "city": "Boston", "timezone": "America/New_York"},
+    "702": {"state": "NV", "city": "Las Vegas", "timezone": "America/Los_Angeles"},
+    "713": {"state": "TX", "city": "Houston", "timezone": "America/Chicago"},
+    "718": {"state": "NY", "city": "New York", "timezone": "America/New_York"},
+    "773": {"state": "IL", "city": "Chicago", "timezone": "America/Chicago"},
+    "818": {"state": "CA", "city": "Los Angeles", "timezone": "America/Los_Angeles"},
+    "954": {"state": "FL", "city": "Fort Lauderdale", "timezone": "America/New_York"},
+}
