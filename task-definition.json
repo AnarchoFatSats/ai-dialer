@@ -1,0 +1,70 @@
+{
+  "family": "aidialer-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/aidialer-task-role",
+  "containerDefinitions": [
+    {
+      "name": "aidialer-app",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/aidialer:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "DEBUG",
+          "value": "false"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgresql://postgres:PASSWORD@RDS_ENDPOINT:5432/aidialer"
+        },
+        {
+          "name": "REDIS_URL",
+          "value": "redis://REDIS_ENDPOINT:6379"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "BASE_URL",
+          "value": "https://your-domain.com"
+        },
+        {
+          "name": "WEBHOOK_BASE_URL",
+          "value": "https://your-domain.com"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/aidialer-task",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+} 
