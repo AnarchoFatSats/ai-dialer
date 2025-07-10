@@ -1,5 +1,5 @@
 """
-AI Dialer Main Application
+Reach Main Application
 FastAPI application with Phase 3 optimization features.
 """
 
@@ -104,7 +104,7 @@ class DIDInitializeRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting AI Dialer application")
+    logger.info("Starting Reach application")
     
     # Initialize services with graceful error handling
     startup_errors = []
@@ -158,7 +158,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down AI Dialer application")
+    logger.info("Shutting down Reach application")
 
     # Stop call orchestration service
     try:
@@ -170,8 +170,8 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="AI Dialer API",
-    description="AI-powered outbound voice dialer with advanced optimization",
+    title="Reach API",
+    description="AI-powered outbound voice platform with advanced optimization",
     version="1.0.0",
     lifespan=lifespan
 )
