@@ -10,7 +10,7 @@ from sqlalchemy import select, update, and_, or_
 
 from app.config import settings
 from app.database import get_db
-from app.models import Campaign, Lead, CallLog, DIDPool, CallAnalytics
+from app.models import Campaign, Lead, CallLog, DIDPool, CampaignAnalytics
 from app.services.twilio_integration import twilio_service
 from app.services.ai_conversation import ai_conversation_engine
 from app.services.media_stream_handler import media_stream_handler

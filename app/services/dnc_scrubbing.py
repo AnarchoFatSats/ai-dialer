@@ -506,4 +506,7 @@ class DNCScrubbingService:
 async def get_dnc_scrubbing_service():
     """Get DNC scrubbing service with proper session management."""
     async with DNCScrubbingService() as service:
-        yield service 
+        yield service
+
+# Global instance for imports
+dnc_scrubbing_service = DNCScrubbingService() 

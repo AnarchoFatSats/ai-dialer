@@ -9,20 +9,23 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
     
-    # Database
-    database_url: str = "postgresql://postgres:password@localhost:5432/aidialer"
-    redis_url: str = "redis://localhost:6379"
+    # Database - AWS RDS PostgreSQL
+    database_url: str = "postgresql://postgres:password@your-rds-endpoint.us-east-1.rds.amazonaws.com:5432/aidialer"
+    redis_url: str = "redis://your-elasticache-endpoint.cache.amazonaws.com:6379"
     
-    # Twilio Configuration
-    twilio_account_sid: str
-    twilio_auth_token: str
-    twilio_phone_number: Optional[str] = None
-    webhook_base_url: str
+    # AWS SNS Configuration for notifications
+    aws_sns_region: Optional[str] = "us-east-1"
+    aws_sns_topic_arn: Optional[str] = None
     
-    # AI Services
-    anthropic_api_key: str
-    deepgram_api_key: str
-    elevenlabs_api_key: str
+    # AWS Connect Configuration for voice calls
+    aws_connect_instance_id: Optional[str] = None
+    aws_connect_contact_flow_id: Optional[str] = None
+    webhook_base_url: str = "https://your-domain.com"
+    
+    # AI Services (optional for development)
+    anthropic_api_key: Optional[str] = "your_anthropic_key"
+    deepgram_api_key: Optional[str] = "your_deepgram_key"
+    elevenlabs_api_key: Optional[str] = "your_elevenlabs_key"
     elevenlabs_voice_id: str = "pNInz6obpgDQGcFmaJgB"  # Default voice ID (Adam)
     openai_api_key: Optional[str] = None
     
@@ -39,11 +42,11 @@ class Settings(BaseSettings):
     max_audio_chunk_size: int = 8000
     speech_detection_threshold: float = 0.7
     
-    # Reputation & Compliance
-    numeracle_api_key: str
+    # Reputation & Compliance (optional for development)
+    numeracle_api_key: Optional[str] = "your_numeracle_key"
     free_caller_registry_api_key: Optional[str] = None
-    dnc_registry_username: str
-    dnc_registry_password: str
+    dnc_registry_username: Optional[str] = "your_dnc_username"
+    dnc_registry_password: Optional[str] = "your_dnc_password"
     
     # Cost Optimization
     max_cost_per_minute: float = 0.025
@@ -68,16 +71,33 @@ class Settings(BaseSettings):
     grafana_url: str = "http://localhost:3000"
     sentry_dsn: Optional[str] = None
     
-    # Security
-    jwt_secret_key: str
-    webhook_verification_token: str
-    encryption_key: str
+    # Security (defaults for development)
+    jwt_secret_key: str = "your_jwt_secret_key_development_only"
+    webhook_verification_token: str = "your_webhook_token_development_only"
+    encryption_key: str = "your_encryption_key_development_only"
     
-    # AWS (if using cloud services)
+    # AWS Configuration (required for production)
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     aws_region: str = "us-east-1"
     s3_bucket_name: Optional[str] = None
+    
+    # AWS RDS Configuration
+    rds_endpoint: Optional[str] = None
+    rds_port: int = 5432
+    rds_database: str = "aidialer"
+    rds_username: str = "postgres"
+    rds_password: Optional[str] = None
+    
+    # AWS ElastiCache Configuration
+    elasticache_endpoint: Optional[str] = None
+    elasticache_port: int = 6379
+    
+    # AWS Connect Configuration (optional for development)
+    aws_connect_instance_id: Optional[str] = "your_connect_instance_id"
+    aws_connect_instance_arn: Optional[str] = "your_connect_instance_arn"
+    aws_connect_contact_flow_id: Optional[str] = "your_contact_flow_id"
+    aws_connect_queue_id: Optional[str] = "your_queue_id"
     
     # Logging
     log_level: str = "INFO"
@@ -106,12 +126,12 @@ class Settings(BaseSettings):
     spam_check_api_key: Optional[str] = None
     
     @property
-    def TWILIO_ACCOUNT_SID(self) -> str:
-        return self.twilio_account_sid
-    
+    def AWS_SNS_REGION(self) -> str:
+        return self.aws_sns_region
+
     @property
-    def TWILIO_AUTH_TOKEN(self) -> str:
-        return self.twilio_auth_token
+    def AWS_CONNECT_INSTANCE_ID(self) -> Optional[str]:
+        return self.aws_connect_instance_id
     
     @property
     def BASE_URL(self) -> str:
@@ -152,9 +172,14 @@ class Settings(BaseSettings):
 # Create global settings instance
 settings = Settings()
 
-# Twilio Configuration
-TWILIO_WEBHOOK_EVENTS = [
-    "initiated", "ringing", "answered", "completed", "failed", "cancelled"
+# AWS SNS Configuration for notifications
+AWS_SNS_NOTIFICATION_TYPES = [
+    "campaign_started", "campaign_completed", "call_completed", "transfer_requested", "system_alert"
+]
+
+# AWS Connect Configuration for voice calls
+AWS_CONNECT_CONTACT_FLOW_TYPES = [
+    "inbound", "outbound", "transfer", "queue"
 ]
 
 # Claude System Prompt

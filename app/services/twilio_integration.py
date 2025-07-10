@@ -12,7 +12,7 @@ from twilio.base.exceptions import TwilioRestException
 
 from app.config import settings
 from app.database import get_db
-from app.models import Campaign, Lead, CallLog, DIDPool, CallAnalytics
+from app.models import Campaign, Lead, CallLog, DIDPool, CampaignAnalytics
 
 logger = logging.getLogger(__name__)
 

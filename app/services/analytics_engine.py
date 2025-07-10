@@ -749,4 +749,7 @@ class AnalyticsEngine:
 async def get_analytics_engine():
     """Get analytics engine with proper session management."""
     async with AnalyticsEngine() as engine:
-        yield engine 
+        yield engine
+
+# Global instance for imports
+analytics_engine = AnalyticsEngine() 
