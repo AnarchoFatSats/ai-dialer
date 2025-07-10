@@ -218,7 +218,7 @@ async def health_check():
         health_status["services"]["redis"] = f"unhealthy: {str(e)}"
     
     # Check external services
-    health_status["services"]["twilio"] = "configured" if settings.twilio_account_sid != "your_account_sid" else "not_configured"
+    health_status["services"]["aws_connect"] = "configured" if settings.aws_connect_instance_id != "placeholder-instance-id" else "not_configured"
     health_status["services"]["anthropic"] = "configured" if settings.anthropic_api_key != "your_anthropic_key" else "not_configured"
     health_status["services"]["deepgram"] = "configured" if settings.deepgram_api_key != "your_deepgram_key" else "not_configured"
     health_status["services"]["elevenlabs"] = "configured" if settings.elevenlabs_api_key != "your_elevenlabs_key" else "not_configured"
