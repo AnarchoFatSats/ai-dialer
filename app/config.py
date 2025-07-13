@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     webhook_base_url: str = "https://your-domain.com"
     
     # AI Services (optional for development)
-    anthropic_api_key: Optional[str] = "placeholder-anthropic-key"
+    anthropic_api_key: Optional[str] = None
     deepgram_api_key: Optional[str] = "placeholder-deepgram-key"
     elevenlabs_api_key: Optional[str] = "placeholder-elevenlabs-key"
     elevenlabs_voice_id: str = "pNInz6obpgDQGcFmaJgB"  # Default voice ID (Adam)

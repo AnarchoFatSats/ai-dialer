@@ -42,30 +42,35 @@ class ConversationContext:
 
 class AIConversationEngine:
     def __init__(self):
-        # Initialize clients only if API keys are valid (not placeholder
-        # values)
+        # Initialize clients only if API keys are valid (not placeholder values)
         self.anthropic_client = None
         self.deepgram_client = None
+        self.elevenlabs_client = None
 
         try:
-            if settings.ANTHROPIC_API_KEY and not settings.ANTHROPIC_API_KEY.startswith(
-                    'your_'):
+            if (settings.ANTHROPIC_API_KEY and 
+                not settings.ANTHROPIC_API_KEY.startswith('placeholder-') and
+                not settings.ANTHROPIC_API_KEY.startswith('your_')):
                 self.anthropic_client = anthropic.AsyncAnthropic(
                     api_key=settings.ANTHROPIC_API_KEY)
         except Exception as e:
             logger.warning(f"Failed to initialize Anthropic client: {e}")
 
         try:
-            if settings.DEEPGRAM_API_KEY and not settings.DEEPGRAM_API_KEY.startswith(
-                    'your_'):
+            if (settings.DEEPGRAM_API_KEY and 
+                not settings.DEEPGRAM_API_KEY.startswith('placeholder-') and
+                not settings.DEEPGRAM_API_KEY.startswith('your_')):
                 self.deepgram_client = Deepgram(settings.DEEPGRAM_API_KEY)
         except Exception as e:
             logger.warning(f"Failed to initialize Deepgram client: {e}")
 
         try:
-            if settings.ELEVENLABS_API_KEY and not settings.ELEVENLABS_API_KEY.startswith(
-                    'your_'):
-                elevenlabs.set_api_key(settings.ELEVENLABS_API_KEY)
+            if (settings.ELEVENLABS_API_KEY and 
+                not settings.ELEVENLABS_API_KEY.startswith('placeholder-') and
+                not settings.ELEVENLABS_API_KEY.startswith('your_')):
+                # Use the new ElevenLabs client initialization
+                self.elevenlabs_client = elevenlabs.ElevenLabs(
+                    api_key=settings.ELEVENLABS_API_KEY)
         except Exception as e:
             logger.warning(f"Failed to initialize ElevenLabs client: {e}")
 
@@ -562,7 +567,7 @@ Sentiment Score: {context.sentiment_score}
                 return b""
 
             # Use ElevenLabs functional API
-            audio_bytes = elevenlabs.generate(
+            audio_bytes = self.elevenlabs_client.generate(
                 text=text,
                 voice=settings.ELEVENLABS_VOICE_ID,
                 model="eleven_turbo_v2"
@@ -730,3 +735,39 @@ Sentiment Score: {context.sentiment_score}
 
 # Global instance
 ai_conversation_engine = AIConversationEngine()
+
+
+class AIConversationService:
+    """Simplified AI conversation service for testing and basic usage."""
+    
+    def __init__(self):
+        self.anthropic_client = None
+        
+        try:
+            if (settings.ANTHROPIC_API_KEY and 
+                not settings.ANTHROPIC_API_KEY.startswith('placeholder-') and
+                not settings.ANTHROPIC_API_KEY.startswith('your_')):
+                self.anthropic_client = anthropic.AsyncAnthropic(
+                    api_key=settings.ANTHROPIC_API_KEY)
+        except Exception as e:
+            logger.warning(f"Failed to initialize Anthropic client: {e}")
+    
+    async def generate_response(self, conversation_context: str, user_input: str, call_metadata: dict) -> str:
+        """Generate a simple AI response for testing."""
+        if not self.anthropic_client:
+            return "AI service not available (no valid API key configured)"
+        
+        try:
+            response = await self.anthropic_client.messages.create(
+                model=settings.claude_model,
+                max_tokens=150,
+                messages=[{
+                    "role": "user",
+                    "content": f"Context: {conversation_context}\nUser: {user_input}\nPlease respond naturally."
+                }]
+            )
+            
+            return response.content[0].text if response.content else "No response generated"
+        except Exception as e:
+            logger.error(f"Error generating AI response: {e}")
+            return f"Error: {str(e)}"
