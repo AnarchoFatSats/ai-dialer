@@ -27,9 +27,9 @@ import {
   Assessment,
   ShowChart
 } from '@mui/icons-material';
-import axios from 'axios';
+import apiService from '../services/api';
 
-const ConversationalTrainer = () => {
+const ConversationalTrainer = ({ apiService: propApiService }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -41,6 +41,9 @@ const ConversationalTrainer = () => {
   const [suggestedResponses, setSuggestedResponses] = useState([]);
   const [learningInsights, setLearningInsights] = useState([]);
   const messagesEndRef = useRef(null);
+
+  // Use the API service passed as prop, or fall back to the default one
+  const api = propApiService || apiService;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,18 +60,16 @@ const ConversationalTrainer = () => {
   const startConversation = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.post('/api/conversational-training/start', {
-        user_id: 'user_123' // In real app, get from auth
-      });
+      const response = await api.startConversationalTraining('user_123');
       
-      setSessionId(response.data.session_id);
-      setConversationState(response.data.state);
-      setSuggestedResponses(response.data.suggested_responses || []);
+      setSessionId(response.session_id);
+      setConversationState(response.state);
+      setSuggestedResponses(response.suggested_responses || []);
       
       setMessages([{
         id: 1,
         role: 'assistant',
-        content: response.data.message,
+        content: response.message,
         timestamp: new Date().toISOString(),
         type: 'welcome'
       }]);
@@ -102,34 +103,31 @@ const ConversationalTrainer = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('/api/conversational-training/continue', {
-        session_id: sessionId,
-        message: message
-      });
+      const response = await api.continueConversationalTraining(sessionId, message);
 
       const assistantMessage = {
         id: messages.length + 2,
         role: 'assistant',
-        content: response.data.message,
+        content: response.message,
         timestamp: new Date().toISOString(),
-        type: response.data.state === 'launched' ? 'success' : 'default'
+        type: response.state === 'launched' ? 'success' : 'default'
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      setConversationState(response.data.state);
-      setSuggestedResponses(response.data.suggested_responses || []);
+      setConversationState(response.state);
+      setSuggestedResponses(response.suggested_responses || []);
       
-      if (response.data.campaign_id) {
-        setCampaignId(response.data.campaign_id);
+      if (response.campaign_id) {
+        setCampaignId(response.campaign_id);
       }
       
-      if (response.data.campaign_config) {
-        setCampaignConfig(response.data.campaign_config);
+      if (response.campaign_config) {
+        setCampaignConfig(response.campaign_config);
       }
 
       // Load learning insights if available
-      if (response.data.campaign_id && response.data.state === 'ready_to_deploy') {
-        await loadLearningInsights(response.data.campaign_id);
+      if (response.campaign_id && response.state === 'ready_to_deploy') {
+        await loadLearningInsights(response.campaign_id);
       }
 
     } catch (error) {
@@ -149,8 +147,8 @@ const ConversationalTrainer = () => {
 
   const loadLearningInsights = async (campaignId) => {
     try {
-      const response = await axios.get(`/api/learning/insights/${campaignId}`);
-      setLearningInsights(response.data.insights || []);
+      // This would be implemented when learning insights endpoint is available
+      console.log('Loading learning insights for campaign:', campaignId);
     } catch (error) {
       console.error('Error loading learning insights:', error);
     }

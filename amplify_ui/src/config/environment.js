@@ -1,7 +1,12 @@
 // Environment configuration for the frontend
 const config = {
   // Backend API URL - change this to your deployed backend URL
-  API_BASE_URL: process.env.REACT_APP_BACKEND_API_URL || 'http://localhost:8000',
+  // For development with local backend, use: 'http://localhost:8000'
+  // For production with deployed backend, use: 'https://your-backend-domain.com'
+  API_BASE_URL: process.env.REACT_APP_BACKEND_API_URL || 
+    (process.env.NODE_ENV === 'production' 
+      ? 'https://your-backend-domain.com' // Replace with your actual backend domain
+      : 'http://localhost:8000'),
   
   // AWS Configuration
   AWS_REGION: process.env.REACT_APP_AWS_REGION || 'us-east-1',
@@ -24,6 +29,9 @@ const config = {
   // Development mode detection
   IS_DEVELOPMENT: process.env.NODE_ENV === 'development',
   IS_PRODUCTION: process.env.NODE_ENV === 'production',
+  
+  // Fallback for local development when backend is not available
+  USE_MOCK_DATA: process.env.REACT_APP_USE_MOCK_DATA === 'true',
 };
 
 export default config; 

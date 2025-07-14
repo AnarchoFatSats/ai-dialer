@@ -286,6 +286,47 @@ class APIService {
     }
   }
 
+  // Conversational Training
+  async startConversationalTraining(userId) {
+    try {
+      const response = await api.post(`/conversational-training/start?user_id=${userId}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to start conversational training: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  async continueConversationalTraining(sessionId, message) {
+    try {
+      const response = await api.post('/conversational-training/continue', {
+        session_id: sessionId,
+        message: message
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to continue conversational training: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  async getLearningStats() {
+    try {
+      const response = await api.get('/analytics/learning-stats');
+      // The backend returns { success: true, data: {...} }
+      return response.data?.data || response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch learning stats: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  async startTraining(trainingConfig) {
+    try {
+      const response = await api.post('/training/start', trainingConfig);
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to start training: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
   // Multi-Agent System
   async getMultiAgentDashboard() {
     try {

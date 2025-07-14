@@ -594,6 +594,92 @@ async def get_ai_performance_metrics():
         logger.error(f"Error getting AI performance metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/analytics/learning-stats", tags=["Analytics"])
+async def get_learning_statistics(db: AsyncSession = Depends(get_db)):
+    """Get AI learning and training statistics."""
+    try:
+        # Total campaigns with learning data
+        campaigns_with_learning = await db.execute(
+            select(func.count(func.distinct(CallLog.campaign_id))).where(
+                CallLog.conversation_turns > 0
+            )
+        )
+        campaigns_with_learning = campaigns_with_learning.scalar() or 0
+
+        # Total learning sessions (calls with AI interaction)
+        learning_sessions = await db.execute(
+            select(func.count(CallLog.id)).where(
+                CallLog.conversation_turns > 0
+            )
+        )
+        learning_sessions = learning_sessions.scalar() or 0
+
+        # Average conversation turns per call
+        avg_conversation_turns = await db.execute(
+            select(func.avg(CallLog.conversation_turns)).where(
+                CallLog.conversation_turns > 0
+            )
+        )
+        avg_conversation_turns = avg_conversation_turns.scalar() or 0
+
+        # Learning progress metrics
+        total_calls = await db.execute(
+            select(func.count(CallLog.id))
+        )
+        total_calls = total_calls.scalar() or 0
+
+        # Progress calculation
+        progress = (learning_sessions / total_calls * 100) if total_calls > 0 else 0
+
+        # Get recent transfers from learning sessions
+        recent_transfers = await db.execute(
+            select(func.count(CallLog.id)).where(
+                CallLog.conversation_turns > 0,
+                CallLog.disposition == CallDisposition.TRANSFER,
+                CallLog.initiated_at >= datetime.utcnow() - timedelta(days=7)
+            )
+        )
+        recent_transfers = recent_transfers.scalar() or 0
+
+        # Get recent answered calls with AI interaction
+        recent_answered = await db.execute(
+            select(func.count(CallLog.id)).where(
+                CallLog.conversation_turns > 0,
+                CallLog.status == CallStatus.ANSWERED,
+                CallLog.initiated_at >= datetime.utcnow() - timedelta(days=7)
+            )
+        )
+        recent_answered = recent_answered.scalar() or 0
+
+        # Calculate success rate
+        recent_success_rate = (recent_transfers / recent_answered * 100) if recent_answered > 0 else 0
+
+        # Get conversions count
+        conversions_result = await db.execute(
+            select(func.count(CallLog.id)).where(
+                CallLog.conversation_turns > 0,
+                CallLog.disposition == CallDisposition.TRANSFER
+            )
+        )
+        conversions = conversions_result.scalar() or 0
+
+        return {
+            "success": True,
+            "data": {
+                "progress": round(progress, 1),
+                "successRate": round(recent_success_rate, 1),
+                "totalCalls": learning_sessions,
+                "conversions": conversions,
+                "campaigns_with_learning": campaigns_with_learning,
+                "avg_conversation_turns": round(avg_conversation_turns, 1)
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting learning statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Quality Scoring Endpoints
 
 

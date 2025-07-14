@@ -22,11 +22,15 @@ import {
   Psychology
 } from '@mui/icons-material';
 import ConversationalTrainer from './ConversationalTrainer';
+import apiService from '../services/api';
 
-const AITrainingView = () => {
+const AITrainingView = ({ apiService: propApiService }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [isTraining, setIsTraining] = useState(false);
   const [learningStats, setLearningStats] = useState({});
+  
+  // Use the API service passed as prop, or fall back to the default one
+  const api = propApiService || apiService;
 
   useEffect(() => {
     // Load learning stats
@@ -35,11 +39,17 @@ const AITrainingView = () => {
 
   const loadLearningStats = async () => {
     try {
-      const response = await fetch('/api/learning-stats');
-      const data = await response.json();
+      const data = await api.getLearningStats();
       setLearningStats(data);
     } catch (error) {
       console.error('Error loading learning stats:', error);
+      // Set default values if API call fails
+      setLearningStats({
+        progress: 0,
+        successRate: 0,
+        totalCalls: 0,
+        conversions: 0
+      });
     }
   };
 
@@ -50,15 +60,11 @@ const AITrainingView = () => {
   const startTraining = async () => {
     setIsTraining(true);
     try {
-      // API call to start training
-      const response = await fetch('/api/start-training', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await api.startTraining({
+        user_id: 'user_123' // In real app, get from auth
       });
       
-      if (response.ok) {
+      if (response) {
         console.log('Training started successfully');
       }
     } catch (error) {
@@ -116,7 +122,7 @@ const AITrainingView = () => {
   );
 
   const renderTrainingInterface = () => (
-    <ConversationalTrainer />
+    <ConversationalTrainer apiService={api} />
   );
 
   const renderAnalytics = () => (
