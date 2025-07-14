@@ -78,6 +78,7 @@ class GeneratedCampaign:
     """Complete campaign configuration generated from user inputs"""
     name: str
     description: str
+    raw_script: str  # Original sales script
     conversation_flow: Dict[str, Any]
     ai_prompts: Dict[str, str]
     voice_settings: Dict[str, Any]
@@ -160,6 +161,7 @@ class GuidedTrainingService:
             return GeneratedCampaign(
                 name=campaign_name,
                 description=f"AI-generated campaign for {objectives.primary_goal}",
+                raw_script=sales_script,
                 conversation_flow=conversation_flow,
                 ai_prompts=ai_prompts,
                 voice_settings=voice_settings,
@@ -644,6 +646,7 @@ class GuidedTrainingService:
                 name=generated_campaign.name,
                 description=generated_campaign.description,
                 status=CampaignStatus.DRAFT,
+                script_template=generated_campaign.raw_script,  # Original sales script
                 
                 # AI Configuration
                 system_prompt=generated_campaign.ai_prompts.get("system"),

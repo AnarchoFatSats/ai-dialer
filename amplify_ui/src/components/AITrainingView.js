@@ -4,1199 +4,339 @@ import {
   Typography,
   Card,
   CardContent,
-  Grid,
-  Tabs,
-  Tab,
   Button,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Switch,
-  FormControlLabel,
-  Chip,
-  IconButton,
-  Divider,
-  LinearProgress,
   Alert,
+  Divider,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Paper,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
-  Psychology,
-  RecordVoiceOver,
-  Campaign,
-  Analytics,
-  Settings,
-  PlayArrow,
-  Stop,
-  Edit,
-  Add,
-  Delete,
-  ExpandMore,
-  Science,
-  VolumeUp,
-  TrendingUp,
-  School,
-  SmartToy,
-  Lightbulb,
-  Speed,
-  Assignment,
-  CheckCircle,
-  Warning,
-  Info,
   AutoAwesome,
-  Business,
-  Description,
-  VoiceChat,
-  Preview,
-  Launch,
-  Assessment,
-  Security
+  Settings,
+  ShowChart,
+  TrendingUp,
+  Psychology,
+  Info,
+  Warning
 } from '@mui/icons-material';
+import ConversationalTrainer from './ConversationalTrainer';
 
 const AITrainingView = () => {
-  const [activeTab, setActiveTab] = useState(0);
-  const [selectedCampaign, setSelectedCampaign] = useState('');
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [showLearningInsights, setShowLearningInsights] = useState(false);
+  const [continuousLearning, setContinuousLearning] = useState(true);
+  const [autoOptimization, setAutoOptimization] = useState(true);
   const [campaigns, setCampaigns] = useState([]);
-  const [conversationFlows, setConversationFlows] = useState([]);
-  const [isTraining, setIsTraining] = useState(false);
-  const [trainingProgress, setTrainingProgress] = useState(0);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [voiceSettings, setVoiceSettings] = useState({
-    voice_id: 'rachel',
-    speed: 1.0,
-    pitch: 1.0,
-    emphasis: 'medium'
-  });
+  const [learningStats, setLearningStats] = useState({});
 
-  // Mock data - replace with actual API calls
   useEffect(() => {
-    setCampaigns([
-      { id: 1, name: 'Solar Energy Campaign', leads: 1250, conversion_rate: 8.2 },
-      { id: 2, name: 'Insurance Leads', leads: 890, conversion_rate: 12.5 },
-      { id: 3, name: 'Real Estate Prospects', leads: 650, conversion_rate: 15.8 }
-    ]);
-    
-    setConversationFlows([
-      { id: 1, name: 'Aggressive Close', success_rate: 23.4, calls_made: 1250 },
-      { id: 2, name: 'Consultative Approach', success_rate: 31.2, calls_made: 890 },
-      { id: 3, name: 'Educational Flow', success_rate: 18.7, calls_made: 650 }
-    ]);
+    // Load campaigns and learning stats
+    loadCampaigns();
+    loadLearningStats();
   }, []);
 
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
+  const loadCampaigns = async () => {
+    try {
+      const response = await fetch('/api/campaigns');
+      const data = await response.json();
+      setCampaigns(data.campaigns || []);
+    } catch (error) {
+      console.error('Error loading campaigns:', error);
+    }
   };
 
-  const renderCampaignSelection = () => (
-    <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-      <CardContent>
-        <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display', mb: 2 }}>
-          Select Campaign for AI Training
-        </Typography>
-        <FormControl fullWidth>
-          <InputLabel sx={{ color: '#FFD700' }}>Campaign</InputLabel>
-          <Select
-            value={selectedCampaign}
-            onChange={(e) => setSelectedCampaign(e.target.value)}
+  const loadLearningStats = async () => {
+    try {
+      // Mock learning stats for now
+      setLearningStats({
+        totalOptimizations: 47,
+        averageImprovement: 23.5,
+        activeCampaigns: 12,
+        learningInsights: 156
+      });
+    } catch (error) {
+      console.error('Error loading learning stats:', error);
+    }
+  };
+
+  const LearningInsightsDialog = () => (
+    <Dialog
+      open={showLearningInsights}
+      onClose={() => setShowLearningInsights(false)}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
+        🧠 AI Learning Insights
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ py: 2 }}>
+          <Alert 
+            severity="info" 
             sx={{ 
-              color: '#FFD700',
-              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#FFD700' }
+              mb: 2,
+              '& .MuiAlert-message': { color: '#FFD700' },
+              bgcolor: '#1A1A1A',
+              border: '1px solid #333'
             }}
           >
-            {campaigns.map((campaign) => (
-              <MenuItem key={campaign.id} value={campaign.id}>
-                {campaign.name} - {campaign.leads} leads ({campaign.conversion_rate}% conversion)
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </CardContent>
-    </Card>
-  );
-
-  const renderConversationBuilder = () => (
-    <Grid container spacing={3}>
-      {/* Conversation Flow Design */}
-      <Grid item xs={12} md={8}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #00C851' }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ color: '#00C851', fontFamily: 'Playfair Display' }}>
-                Conversation Flow Builder
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
+            The AI continuously learns from every call to improve performance. Here's what it has learned:
+          </Alert>
+          
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 3 }}>
+            <Card sx={{ bgcolor: '#1A1A1A', border: '1px solid #333' }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
+                  📈 Performance Improvements
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                  Total Optimizations: {learningStats.totalOptimizations}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                  Average Improvement: {learningStats.averageImprovement}%
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#fff' }}>
+                  Active Learning Campaigns: {learningStats.activeCampaigns}
+                </Typography>
+              </CardContent>
+            </Card>
+            
+            <Card sx={{ bgcolor: '#1A1A1A', border: '1px solid #333' }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ color: '#FFD700', mb: 2 }}>
+                  🎯 Key Patterns Found
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                  • Calls at 2-3 PM have 34% higher success rates
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
+                  • Conversations with 2-3 objections perform best
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#fff' }}>
+                  • Friendly tone increases transfers by 28%
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+          
+          <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
+            Recent Optimizations Applied
+          </Typography>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {[
+              'Optimized objection handling for solar campaigns (+15% success)',
+              'Adjusted conversation timing for insurance leads (+12% transfers)',
+              'Improved greeting scripts based on sentiment analysis (+8% engagement)',
+              'Enhanced transfer triggers for real estate campaigns (+19% conversions)'
+            ].map((optimization, index) => (
+              <Alert
+                key={index}
+                severity="success"
                 sx={{
-                  background: 'linear-gradient(45deg, #FFD700, #FFA000)',
-                  color: '#000',
-                  fontWeight: 'bold',
-                  '&:hover': { background: 'linear-gradient(45deg, #FFA000, #FFD700)' }
+                  '& .MuiAlert-message': { color: '#00C851' },
+                  bgcolor: '#0A0A0A',
+                  border: '1px solid #00C851'
                 }}
               >
-                Add Stage
-              </Button>
-            </Box>
-            
-            {/* Conversation Stages */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {['GREETING', 'QUALIFICATION', 'PRESENTATION', 'OBJECTION_HANDLING', 'CLOSING', 'TRANSFER'].map((stage, index) => (
-                <Accordion key={stage} sx={{ background: '#1A1A1A', border: '1px solid #333' }}>
-                  <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#FFD700' }} />}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Chip 
-                        label={index + 1} 
-                        sx={{ 
-                          background: 'linear-gradient(45deg, #00C851, #00A142)', 
-                          color: '#fff',
-                          fontWeight: 'bold'
-                        }} 
-                      />
-                      <Typography sx={{ color: '#FFD700', fontWeight: 'bold' }}>
-                        {stage.replace('_', ' ')}
-                      </Typography>
-                    </Box>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="AI Prompt Template"
-                          multiline
-                          rows={4}
-                          defaultValue={`Generate a ${stage.toLowerCase()} response that...`}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              color: '#FFD700',
-                              '& fieldset': { borderColor: '#FFD700' }
-                            },
-                            '& .MuiInputLabel-root': { color: '#FFD700' }
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="Success Keywords"
-                          placeholder="yes, interested, sounds good, tell me more"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              color: '#00C851',
-                              '& fieldset': { borderColor: '#00C851' }
-                            },
-                            '& .MuiInputLabel-root': { color: '#00C851' }
-                          }}
-                        />
-                        <TextField
-                          fullWidth
-                          label="Objection Keywords"
-                          placeholder="no, not interested, busy, remove me"
-                          sx={{
-                            mt: 2,
-                            '& .MuiOutlinedInput-root': {
-                              color: '#ff4444',
-                              '& fieldset': { borderColor: '#ff4444' }
-                            },
-                            '& .MuiInputLabel-root': { color: '#ff4444' }
-                          }}
-                        />
-                      </Grid>
-                    </Grid>
-                  </AccordionDetails>
-                </Accordion>
-              ))}
-            </Box>
-          </CardContent>
-        </Card>
-      </Grid>
-      
-      {/* Training Options */}
-      <Grid item xs={12} md={4}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display', mb: 2 }}>
-              Training Options
-            </Typography>
-            
+                {optimization}
+              </Alert>
+            ))}
+          </Box>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setShowLearningInsights(false)} sx={{ color: '#999' }}>
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  const AdvancedOptionsDialog = () => (
+    <Dialog
+      open={showAdvancedOptions}
+      onClose={() => setShowAdvancedOptions(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
+        ⚙️ Advanced Settings
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ py: 2 }}>
+          <Alert 
+            severity="info" 
+            sx={{ 
+              mb: 3,
+              '& .MuiAlert-message': { color: '#FFD700' },
+              bgcolor: '#1A1A1A',
+              border: '1px solid #333'
+            }}
+          >
+            These settings control how the AI learns and optimizes your campaigns automatically.
+          </Alert>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <FormControlLabel
-              control={<Switch sx={{ color: '#00C851' }} />}
-              label="Auto-Learning from Successful Calls"
-              sx={{ color: '#FFD700', mb: 2 }}
+              control={
+                <Switch
+                  checked={continuousLearning}
+                  onChange={(e) => setContinuousLearning(e.target.checked)}
+                  sx={{
+                    '& .MuiSwitch-thumb': { backgroundColor: '#FFD700' },
+                    '& .MuiSwitch-track': { backgroundColor: '#333' }
+                  }}
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1" sx={{ color: '#FFD700', fontWeight: 'bold' }}>
+                    Continuous Learning
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#999' }}>
+                    AI analyzes every call and continuously improves performance
+                  </Typography>
+                </Box>
+              }
             />
             
             <FormControlLabel
-              control={<Switch sx={{ color: '#00C851' }} />}
-              label="Sentiment Analysis Training"
-              sx={{ color: '#FFD700', mb: 2 }}
-            />
-            
-            <FormControlLabel
-              control={<Switch sx={{ color: '#00C851' }} />}
-              label="Voice Tone Optimization"
-              sx={{ color: '#FFD700', mb: 2 }}
+              control={
+                <Switch
+                  checked={autoOptimization}
+                  onChange={(e) => setAutoOptimization(e.target.checked)}
+                  sx={{
+                    '& .MuiSwitch-thumb': { backgroundColor: '#00C851' },
+                    '& .MuiSwitch-track': { backgroundColor: '#333' }
+                  }}
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1" sx={{ color: '#00C851', fontWeight: 'bold' }}>
+                    Auto-Optimization
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#999' }}>
+                    Automatically apply proven optimizations to improve results
+                  </Typography>
+                </Box>
+              }
             />
             
             <Divider sx={{ my: 2, borderColor: '#333' }} />
             
-            <Typography variant="subtitle1" sx={{ color: '#00C851', mb: 2 }}>
-              Training Data Sources
+            <Typography variant="body2" sx={{ color: '#999', fontStyle: 'italic' }}>
+              Note: These features work automatically. The conversational trainer handles all the technical complexity for you.
             </Typography>
-            
-            <List>
-              <ListItem>
-                <ListItemIcon>
-                  <RecordVoiceOver sx={{ color: '#FFD700' }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="Call Recordings" 
-                  secondary="1,245 successful calls"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon>
-                  <Assignment sx={{ color: '#00C851' }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="Transcripts" 
-                  secondary="2,890 conversations"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon>
-                  <TrendingUp sx={{ color: '#FFD700' }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary="Performance Data" 
-                  secondary="Real-time metrics"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-            </List>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
+          </Box>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setShowAdvancedOptions(false)} sx={{ color: '#999' }}>
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
-
-  const renderPromptEngineering = () => (
-    <Grid container spacing={3}>
-      <Grid item xs={12} md={8}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display', mb: 2 }}>
-              Advanced Prompt Engineering
-            </Typography>
-            
-            <TextField
-              fullWidth
-              label="System Prompt"
-              multiline
-              rows={6}
-              defaultValue={`You are Sarah, a professional AI sales representative making outbound calls. Your goal is to:
-1. Build rapport quickly and naturally
-2. Qualify leads effectively
-3. Handle objections with empathy
-4. Close for next steps or transfer to specialists
-5. Maintain a conversational, helpful tone
-
-Key Instructions:
-- Keep responses under 30 words
-- Use the lead's name naturally
-- Listen for buying signals
-- Ask open-ended questions
-- Handle objections with "Feel, Felt, Found" technique`}
-              sx={{
-                mb: 3,
-                '& .MuiOutlinedInput-root': {
-                  color: '#FFD700',
-                  '& fieldset': { borderColor: '#FFD700' }
-                },
-                '& .MuiInputLabel-root': { color: '#FFD700' }
-              }}
-            />
-            
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" sx={{ color: '#00C851', mb: 1 }}>
-                  Conversation Parameters
-                </Typography>
-                <TextField
-                  fullWidth
-                  label="Response Length (words)"
-                  type="number"
-                  defaultValue={30}
-                  sx={{
-                    mb: 2,
-                    '& .MuiOutlinedInput-root': {
-                      color: '#FFD700',
-                      '& fieldset': { borderColor: '#FFD700' }
-                    },
-                    '& .MuiInputLabel-root': { color: '#FFD700' }
-                  }}
-                />
-                <TextField
-                  fullWidth
-                  label="Temperature (creativity)"
-                  type="number"
-                  inputProps={{ min: 0, max: 1, step: 0.1 }}
-                  defaultValue={0.7}
-                  sx={{
-                    mb: 2,
-                    '& .MuiOutlinedInput-root': {
-                      color: '#FFD700',
-                      '& fieldset': { borderColor: '#FFD700' }
-                    },
-                    '& .MuiInputLabel-root': { color: '#FFD700' }
-                  }}
-                />
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel sx={{ color: '#FFD700' }}>AI Model</InputLabel>
-                  <Select
-                    defaultValue="claude-3-haiku"
-                    sx={{
-                      color: '#FFD700',
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#FFD700' }
-                    }}
-                  >
-                    <MenuItem value="claude-3-haiku">Claude 3 Haiku (Fast)</MenuItem>
-                    <MenuItem value="claude-3-sonnet">Claude 3 Sonnet (Balanced)</MenuItem>
-                    <MenuItem value="claude-3-opus">Claude 3 Opus (Best)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" sx={{ color: '#00C851', mb: 1 }}>
-                  Conversation Style
-                </Typography>
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel sx={{ color: '#FFD700' }}>Tone</InputLabel>
-                  <Select
-                    defaultValue="professional"
-                    sx={{
-                      color: '#FFD700',
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#FFD700' }
-                    }}
-                  >
-                    <MenuItem value="professional">Professional</MenuItem>
-                    <MenuItem value="friendly">Friendly</MenuItem>
-                    <MenuItem value="consultative">Consultative</MenuItem>
-                    <MenuItem value="aggressive">Aggressive</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel sx={{ color: '#FFD700' }}>Approach</InputLabel>
-                  <Select
-                    defaultValue="consultative"
-                    sx={{
-                      color: '#FFD700',
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#FFD700' }
-                    }}
-                  >
-                    <MenuItem value="consultative">Consultative</MenuItem>
-                    <MenuItem value="direct">Direct</MenuItem>
-                    <MenuItem value="educational">Educational</MenuItem>
-                    <MenuItem value="relationship">Relationship Building</MenuItem>
-                  </Select>
-                </FormControl>
-                <TextField
-                  fullWidth
-                  label="Max Objections Before Transfer"
-                  type="number"
-                  defaultValue={3}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      color: '#FFD700',
-                      '& fieldset': { borderColor: '#FFD700' }
-                    },
-                    '& .MuiInputLabel-root': { color: '#FFD700' }
-                  }}
-                />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-      
-      <Grid item xs={12} md={4}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #00C851' }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#00C851', fontFamily: 'Playfair Display', mb: 2 }}>
-              Quick Templates
-            </Typography>
-            
-            {[
-              { name: 'High-Pressure Sales', success: 28.4, color: '#ff4444' },
-              { name: 'Consultative Approach', success: 34.2, color: '#00C851' },
-              { name: 'Educational First', success: 22.8, color: '#FFD700' },
-              { name: 'Relationship Building', success: 41.5, color: '#00C851' }
-            ].map((template, index) => (
-              <Card key={index} sx={{ mb: 2, background: '#1A1A1A', border: '1px solid #333' }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography sx={{ color: '#FFD700', fontWeight: 'bold' }}>
-                      {template.name}
-                    </Typography>
-                    <Chip 
-                      label={`${template.success}% success`}
-                      sx={{ 
-                        background: template.color, 
-                        color: '#fff',
-                        fontSize: '0.75rem'
-                      }}
-                    />
-                  </Box>
-                  <Button
-                    size="small"
-                    sx={{ mt: 1, color: '#00C851' }}
-                    onClick={() => {/* Load template */}}
-                  >
-                    Load Template
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
-  );
-
-  const renderVoiceTraining = () => (
-    <Grid container spacing={3}>
-      <Grid item xs={12} md={6}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display', mb: 2 }}>
-              Voice Customization
-            </Typography>
-            
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel sx={{ color: '#FFD700' }}>Voice Model</InputLabel>
-              <Select
-                value={voiceSettings.voice_id}
-                onChange={(e) => setVoiceSettings({...voiceSettings, voice_id: e.target.value})}
-                sx={{
-                  color: '#FFD700',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#FFD700' }
-                }}
-              >
-                <MenuItem value="rachel">Rachel (Professional Female)</MenuItem>
-                <MenuItem value="daniel">Daniel (Professional Male)</MenuItem>
-                <MenuItem value="sarah">Sarah (Friendly Female)</MenuItem>
-                <MenuItem value="michael">Michael (Authoritative Male)</MenuItem>
-              </Select>
-            </FormControl>
-            
-            <Typography sx={{ color: '#00C851', mb: 1 }}>
-              Speaking Speed: {voiceSettings.speed}x
-            </Typography>
-            <Box sx={{ px: 2 }}>
-              <input
-                type="range"
-                min="0.5"
-                max="2.0"
-                step="0.1"
-                value={voiceSettings.speed}
-                onChange={(e) => setVoiceSettings({...voiceSettings, speed: parseFloat(e.target.value)})}
-                style={{ width: '100%', marginBottom: '16px' }}
-              />
-            </Box>
-            
-            <Typography sx={{ color: '#00C851', mb: 1 }}>
-              Voice Pitch: {voiceSettings.pitch}x
-            </Typography>
-            <Box sx={{ px: 2 }}>
-              <input
-                type="range"
-                min="0.5"
-                max="2.0"
-                step="0.1"
-                value={voiceSettings.pitch}
-                onChange={(e) => setVoiceSettings({...voiceSettings, pitch: parseFloat(e.target.value)})}
-                style={{ width: '100%', marginBottom: '16px' }}
-              />
-            </Box>
-            
-            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-              <Button
-                variant="contained"
-                startIcon={<VolumeUp />}
-                sx={{
-                  background: 'linear-gradient(45deg, #00C851, #00A142)',
-                  '&:hover': { background: 'linear-gradient(45deg, #00A142, #00C851)' }
-                }}
-              >
-                Test Voice
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<RecordVoiceOver />}
-                sx={{
-                  borderColor: '#FFD700',
-                  color: '#FFD700',
-                  '&:hover': { borderColor: '#FFA000', color: '#FFA000' }
-                }}
-              >
-                Record Sample
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      </Grid>
-      
-      <Grid item xs={12} md={6}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #00C851' }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#00C851', fontFamily: 'Playfair Display', mb: 2 }}>
-              Training Data Management
-            </Typography>
-            
-            <Alert severity="info" sx={{ mb: 2, '& .MuiAlert-message': { color: '#FFD700' } }}>
-              Upload successful call recordings to improve AI responses
-            </Alert>
-            
-            <Button
-              variant="contained"
-              component="label"
-              startIcon={<Add />}
-              sx={{
-                mb: 2,
-                background: 'linear-gradient(45deg, #FFD700, #FFA000)',
-                color: '#000',
-                '&:hover': { background: 'linear-gradient(45deg, #FFA000, #FFD700)' }
-              }}
-            >
-              Upload Training Data
-              <input type="file" hidden accept=".wav,.mp3,.json" />
-            </Button>
-            
-            <Typography variant="subtitle1" sx={{ color: '#FFD700', mb: 1 }}>
-              Training Data Sources
-            </Typography>
-            
-            <List>
-              <ListItem>
-                <ListItemIcon>
-                  <CheckCircle sx={{ color: '#00C851' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="High-Converting Calls"
-                  secondary="1,247 calls with 40%+ success rate"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon>
-                  <Warning sx={{ color: '#FFD700' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Objection Handling"
-                  secondary="892 calls with successful objection resolution"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon>
-                  <Info sx={{ color: '#FFD700' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Transfer Patterns"
-                  secondary="654 successful transfers to human agents"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-            </List>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
-  );
-
-  const renderABTesting = () => (
-    <Grid container spacing={3}>
-      <Grid item xs={12} md={8}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
-                A/B Testing Dashboard
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<Science />}
-                sx={{
-                  background: 'linear-gradient(45deg, #00C851, #00A142)',
-                  '&:hover': { background: 'linear-gradient(45deg, #00A142, #00C851)' }
-                }}
-                onClick={() => setOpenDialog(true)}
-              >
-                New A/B Test
-              </Button>
-            </Box>
-            
-            {/* Active Tests */}
-            <Typography variant="subtitle1" sx={{ color: '#00C851', mb: 2 }}>
-              Active Tests
-            </Typography>
-            
-            {conversationFlows.map((flow, index) => (
-              <Card key={index} sx={{ mb: 2, background: '#1A1A1A', border: '1px solid #333' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography sx={{ color: '#FFD700', fontWeight: 'bold' }}>
-                      {flow.name}
-                    </Typography>
-                    <Chip 
-                      label={`${flow.success_rate}% Success Rate`}
-                      sx={{ 
-                        background: flow.success_rate > 25 ? '#00C851' : '#ff4444',
-                        color: '#fff'
-                      }}
-                    />
-                  </Box>
-                  
-                  <Box sx={{ display: 'flex', gap: 4, mb: 2 }}>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: '#999' }}>
-                        Calls Made
-                      </Typography>
-                      <Typography sx={{ color: '#FFD700', fontWeight: 'bold' }}>
-                        {flow.calls_made.toLocaleString()}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: '#999' }}>
-                        Conversions
-                      </Typography>
-                      <Typography sx={{ color: '#00C851', fontWeight: 'bold' }}>
-                        {Math.round(flow.calls_made * (flow.success_rate / 100))}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: '#999' }}>
-                        Avg Call Duration
-                      </Typography>
-                      <Typography sx={{ color: '#FFD700', fontWeight: 'bold' }}>
-                        {Math.round(Math.random() * 60 + 90)}s
-                      </Typography>
-                    </Box>
-                  </Box>
-                  
-                  <LinearProgress
-                    variant="determinate"
-                    value={flow.success_rate * 2}
-                    sx={{
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: '#333',
-                      '& .MuiLinearProgress-bar': {
-                        background: `linear-gradient(90deg, ${flow.success_rate > 25 ? '#00C851' : '#ff4444'}, ${flow.success_rate > 25 ? '#00A142' : '#cc3333'})`
-                      }
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            ))}
-          </CardContent>
-        </Card>
-      </Grid>
-      
-      <Grid item xs={12} md={4}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #00C851' }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#00C851', fontFamily: 'Playfair Display', mb: 2 }}>
-              Test Performance
-            </Typography>
-            
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" sx={{ color: '#FFD700', mb: 1 }}>
-                Statistical Significance
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CheckCircle sx={{ color: '#00C851' }} />
-                <Typography sx={{ color: '#00C851' }}>
-                  95% Confidence Level
-                </Typography>
-              </Box>
-            </Box>
-            
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" sx={{ color: '#FFD700', mb: 1 }}>
-                Winning Variant
-              </Typography>
-              <Typography sx={{ color: '#00C851', fontWeight: 'bold' }}>
-                Consultative Approach
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#999' }}>
-                +23% higher conversion rate
-              </Typography>
-            </Box>
-            
-            <Button
-              fullWidth
-              variant="contained"
-              sx={{
-                background: 'linear-gradient(45deg, #FFD700, #FFA000)',
-                color: '#000',
-                fontWeight: 'bold',
-                '&:hover': { background: 'linear-gradient(45deg, #FFA000, #FFD700)' }
-              }}
-            >
-              Deploy Winner
-            </Button>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
-  );
-
-  const renderGuidedTraining = () => (
-    <Grid container spacing={3}>
-      <Grid item xs={12} md={8}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-              <AutoAwesome sx={{ color: '#FFD700', fontSize: 32 }} />
-              <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
-                🧠 Guided AI Training
-              </Typography>
-            </Box>
-            
-            <Typography variant="body1" sx={{ color: '#FFD700', mb: 3 }}>
-              Create sophisticated AI campaigns in minutes! Just paste your sales script and describe your goals.
-              The AI will automatically generate optimized prompts, voice settings, and objection handlers.
-            </Typography>
-
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Card sx={{ background: '#111', border: '1px solid #333', mb: 2 }}>
-                  <CardContent>
-                    <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
-                      📋 Business Objectives
-                    </Typography>
-                    
-                    <TextField
-                      fullWidth
-                      label="Primary Goal"
-                      placeholder="e.g., book solar consultations"
-                      sx={{ mb: 2, '& .MuiInputLabel-root': { color: '#FFD700' } }}
-                    />
-                    
-                    <TextField
-                      fullWidth
-                      label="Target Audience"
-                      placeholder="e.g., homeowners with high electric bills"
-                      sx={{ mb: 2, '& .MuiInputLabel-root': { color: '#FFD700' } }}
-                    />
-                    
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                      <InputLabel sx={{ color: '#FFD700' }}>Industry</InputLabel>
-                      <Select sx={{ color: '#FFD700' }}>
-                        <MenuItem value="solar">Solar Energy</MenuItem>
-                        <MenuItem value="insurance">Insurance</MenuItem>
-                        <MenuItem value="real_estate">Real Estate</MenuItem>
-                        <MenuItem value="saas">Software/SaaS</MenuItem>
-                        <MenuItem value="healthcare">Healthcare</MenuItem>
-                        <MenuItem value="finance">Finance</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Card sx={{ background: '#111', border: '1px solid #333', mb: 2 }}>
-                  <CardContent>
-                    <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
-                      🎭 Brand Personality
-                    </Typography>
-                    
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                      <InputLabel sx={{ color: '#FFD700' }}>Tone</InputLabel>
-                      <Select sx={{ color: '#FFD700' }}>
-                        <MenuItem value="professional">Professional</MenuItem>
-                        <MenuItem value="friendly">Friendly</MenuItem>
-                        <MenuItem value="authoritative">Authoritative</MenuItem>
-                        <MenuItem value="casual">Casual</MenuItem>
-                      </Select>
-                    </FormControl>
-                    
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                      <InputLabel sx={{ color: '#FFD700' }}>Pace</InputLabel>
-                      <Select sx={{ color: '#FFD700' }}>
-                        <MenuItem value="fast">Fast</MenuItem>
-                        <MenuItem value="medium">Medium</MenuItem>
-                        <MenuItem value="slow">Slow</MenuItem>
-                      </Select>
-                    </FormControl>
-                    
-                    <FormControl fullWidth>
-                      <InputLabel sx={{ color: '#FFD700' }}>Energy Level</InputLabel>
-                      <Select sx={{ color: '#FFD700' }}>
-                        <MenuItem value="high">High Energy</MenuItem>
-                        <MenuItem value="medium">Medium Energy</MenuItem>
-                        <MenuItem value="low">Low Energy</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Card sx={{ background: '#111', border: '1px solid #333', mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
-                      📜 Sales Script
-                    </Typography>
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={6}
-                      placeholder="Paste your sales script here... The AI will analyze it and generate optimized conversation flows."
-                      sx={{ 
-                        mb: 2,
-                        '& .MuiInputBase-root': { color: '#FFD700' },
-                        '& .MuiInputLabel-root': { color: '#FFD700' }
-                      }}
-                    />
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Preview />}
-                    sx={{
-                      borderColor: '#FFD700',
-                      color: '#FFD700',
-                      '&:hover': { borderColor: '#FFA000', color: '#FFA000' }
-                    }}
-                  >
-                    Preview Campaign
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<AutoAwesome />}
-                    sx={{
-                      background: 'linear-gradient(45deg, #FFD700, #FFA000)',
-                      color: '#000',
-                      '&:hover': { background: 'linear-gradient(45deg, #FFA000, #FFD700)' }
-                    }}
-                  >
-                    Generate AI Campaign
-                  </Button>
-                </Box>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      </Grid>
-
-      <Grid item xs={12} md={4}>
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #00C851', mb: 2 }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#00C851', fontFamily: 'Playfair Display', mb: 2 }}>
-              🚀 What AI Will Generate
-            </Typography>
-            
-            <List>
-              <ListItem>
-                <ListItemIcon>
-                  <VoiceChat sx={{ color: '#00C851' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Conversation Prompts"
-                  secondary="AI-optimized prompts for each stage"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon>
-                  <RecordVoiceOver sx={{ color: '#00C851' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Voice Settings"
-                  secondary="Optimized speed, pitch, and tone"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon>
-                  <Psychology sx={{ color: '#00C851' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Objection Handlers"
-                  secondary="Smart responses to common objections"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemIcon>
-                  <Assessment sx={{ color: '#00C851' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Qualification Logic"
-                  secondary="AI-driven lead qualification criteria"
-                  sx={{ color: '#FFD700' }}
-                />
-              </ListItem>
-            </List>
-          </CardContent>
-        </Card>
-
-        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display', mb: 2 }}>
-              ⚡ Quick Templates
-            </Typography>
-            
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Business />}
-                sx={{ 
-                  borderColor: '#FFD700', 
-                  color: '#FFD700',
-                  justifyContent: 'flex-start'
-                }}
-              >
-                Solar Energy Template
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Security />}
-                sx={{ 
-                  borderColor: '#FFD700', 
-                  color: '#FFD700',
-                  justifyContent: 'flex-start'
-                }}
-              >
-                Insurance Template
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Assessment />}
-                sx={{ 
-                  borderColor: '#FFD700', 
-                  color: '#FFD700',
-                  justifyContent: 'flex-start'
-                }}
-              >
-                Real Estate Template
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
-  );
-
-  const renderTrainingActions = () => (
-    <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
-      <Button
-        variant="contained"
-        size="large"
-        startIcon={isTraining ? <Stop /> : <PlayArrow />}
-        onClick={() => setIsTraining(!isTraining)}
-        sx={{
-          background: isTraining 
-            ? 'linear-gradient(45deg, #ff4444, #cc3333)'
-            : 'linear-gradient(45deg, #00C851, #00A142)',
-          '&:hover': {
-            background: isTraining
-              ? 'linear-gradient(45deg, #cc3333, #ff4444)'
-              : 'linear-gradient(45deg, #00A142, #00C851)'
-          }
-        }}
-      >
-        {isTraining ? 'Stop Training' : 'Start AI Training'}
-      </Button>
-      
-      <Button
-        variant="outlined"
-        size="large"
-        startIcon={<Science />}
-        sx={{
-          borderColor: '#FFD700',
-          color: '#FFD700',
-          '&:hover': { borderColor: '#FFA000', color: '#FFA000' }
-        }}
-      >
-        Run Test Campaign
-      </Button>
-      
-      <Button
-        variant="outlined"
-        size="large"
-        startIcon={<Analytics />}
-        sx={{
-          borderColor: '#00C851',
-          color: '#00C851',
-          '&:hover': { borderColor: '#00A142', color: '#00A142' }
-        }}
-      >
-        View Analytics
-      </Button>
-    </Box>
-  );
-
-  const tabContent = [
-    renderConversationBuilder(),
-    renderPromptEngineering(),
-    renderVoiceTraining(),
-    renderABTesting(),
-    renderGuidedTraining()
-  ];
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography
-        variant="h4"
-        sx={{
-          color: '#FFD700',
-          fontFamily: 'Playfair Display',
-          textAlign: 'center',
-          mb: 3,
-          textShadow: '0 0 20px rgba(255, 215, 0, 0.5)'
-        }}
-      >
-        🤖 AI Training Center
-      </Typography>
-      
-      {renderCampaignSelection()}
-      
-      {isTraining && (
-        <Alert severity="info" sx={{ mb: 3, '& .MuiAlert-message': { color: '#FFD700' } }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography>Training in progress...</Typography>
-            <LinearProgress
-              variant="determinate"
-              value={trainingProgress}
-              sx={{
-                flexGrow: 1,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: '#333',
-                '& .MuiLinearProgress-bar': {
-                  background: 'linear-gradient(90deg, #00C851, #00A142)'
-                }
-              }}
-            />
-            <Typography>{trainingProgress}%</Typography>
-          </Box>
-        </Alert>
-      )}
-      
-      <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          sx={{
-            borderBottom: '1px solid #333',
-            '& .MuiTab-root': {
-              color: '#999',
-              '&.Mui-selected': { color: '#FFD700' }
-            },
-            '& .MuiTabs-indicator': { backgroundColor: '#FFD700' }
-          }}
-        >
-          <Tab icon={<SmartToy />} label="Conversation Builder" />
-          <Tab icon={<Psychology />} label="Prompt Engineering" />
-          <Tab icon={<RecordVoiceOver />} label="Voice Training" />
-          <Tab icon={<Science />} label="A/B Testing" />
-          <Tab icon={<AutoAwesome />} label="Guided Training" />
-        </Tabs>
-        
-        <CardContent>
-          {tabContent[activeTab]}
-          {renderTrainingActions()}
-        </CardContent>
-      </Card>
-
-      {/* New A/B Test Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
-          Create New A/B Test
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Test Name"
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label="Variant A Description"
-                multiline
-                rows={3}
-                sx={{ mb: 2 }}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Success Metric"
-                select
-                sx={{ mb: 2 }}
-              >
-                <MenuItem value="conversion">Conversion Rate</MenuItem>
-                <MenuItem value="transfer">Transfer Rate</MenuItem>
-                <MenuItem value="duration">Call Duration</MenuItem>
-              </TextField>
-              <TextField
-                fullWidth
-                label="Variant B Description"
-                multiline
-                rows={3}
-                sx={{ mb: 2 }}
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} sx={{ color: '#999' }}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={() => setOpenDialog(false)}
-            variant="contained"
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Header with learning status */}
+      <Box sx={{ 
+        bgcolor: '#0A0A0A', 
+        border: '1px solid #FFD700',
+        borderRadius: '8px 8px 0 0',
+        p: 2
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography
+            variant="h4"
             sx={{
-              background: 'linear-gradient(45deg, #FFD700, #FFA000)',
-              color: '#000'
+              color: '#FFD700',
+              fontFamily: 'Playfair Display',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
             }}
           >
-            Start Test
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <AutoAwesome sx={{ color: '#FFD700' }} />
+            AI Training Center
+          </Typography>
+          
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Psychology />}
+              onClick={() => setShowLearningInsights(true)}
+              sx={{
+                borderColor: '#00C851',
+                color: '#00C851',
+                '&:hover': { borderColor: '#00A142', color: '#00A142' }
+              }}
+            >
+              Learning Insights
+            </Button>
+            
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Settings />}
+              onClick={() => setShowAdvancedOptions(true)}
+              sx={{
+                borderColor: '#999',
+                color: '#999',
+                '&:hover': { borderColor: '#FFD700', color: '#FFD700' }
+              }}
+            >
+              Settings
+            </Button>
+          </Box>
+        </Box>
+        
+        <Alert 
+          severity="success" 
+          sx={{ 
+            '& .MuiAlert-message': { color: '#00C851' },
+            bgcolor: '#0A0A0A',
+            border: '1px solid #00C851'
+          }}
+          icon={<TrendingUp />}
+        >
+          <Typography variant="body2">
+            <strong>AI Learning Active:</strong> {learningStats.totalOptimizations} optimizations applied, 
+            {learningStats.averageImprovement}% average improvement across {learningStats.activeCampaigns} campaigns
+          </Typography>
+        </Alert>
+      </Box>
+
+      {/* Main conversational interface */}
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <ConversationalTrainer />
+      </Box>
+
+      {/* Footer info */}
+      <Box sx={{ 
+        bgcolor: '#0A0A0A', 
+        borderTop: '1px solid #333',
+        p: 2,
+        borderRadius: '0 0 8px 8px'
+      }}>
+        <Typography variant="caption" sx={{ color: '#999', textAlign: 'center', display: 'block' }}>
+          💡 The AI learns from every call to improve performance automatically. 
+          No technical configuration needed - just describe your goals naturally.
+        </Typography>
+      </Box>
+
+      {/* Dialogs */}
+      <LearningInsightsDialog />
+      <AdvancedOptionsDialog />
     </Box>
   );
 };

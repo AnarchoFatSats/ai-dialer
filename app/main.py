@@ -8,6 +8,8 @@ from app.services.number_pool_manager import number_pool_manager
 from app.services.agent_pool_manager import agent_pool_manager
 import logging
 import asyncio
+import json
+import uuid
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
@@ -17,23 +19,13 @@ from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uvicorn
 
 from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.models import *
-from sqlalchemy import select
-from app.services.campaign_management import get_campaign_management_service
-from app.services.dnc_scrubbing import get_dnc_scrubbing_service
-from app.services.analytics_engine import get_analytics_engine
-from app.services.quality_scoring import get_quality_scoring_service
-from app.services.cost_optimization import get_cost_optimization_engine
-from app.services.aws_connect_integration import aws_connect_service
-from app.services.aws_connect_media_handler import aws_connect_media_handler
-from app.services.call_orchestration import call_orchestration_service
-from app.services.did_management import did_management_service
-from sqlalchemy import func, and_, select, text, update
+from sqlalchemy import select, func, and_, select, text, update, or_, delete
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 from app.services.guided_training import (
@@ -41,6 +33,9 @@ from app.services.guided_training import (
     IndustryType, SalesStyle, GeneratedCampaign
 )
 from app.services.campaign_templates import CampaignTemplateLibrary, TemplateType
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.conversational_ai_trainer import conversational_ai_trainer
+from app.services.continuous_learning_engine import continuous_learning_engine
 
 # Configure logging
 logging.basicConfig(
@@ -122,77 +117,30 @@ class DIDInitializeRequest(BaseModel):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     # Startup
-    logger.info("Starting Reach application")
+    logger.info("Starting AI Dialer application")
     
-    # Initialize services with graceful error handling
-    startup_errors = []
+    # Start the continuous learning engine
+    learning_task = asyncio.create_task(continuous_learning_engine.start_learning_engine())
     
-    # Test database connection
     try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(select(1))
-        logger.info("Database connection established")
-    except Exception as e:
-        error_msg = f"Database connection failed: {e}"
-        logger.error(error_msg)
-        startup_errors.append(error_msg)
-        
-        # For AWS deployment, database connection is critical
-        if not settings.debug:
-            raise
-    
-    # Test Redis connection (optional in development)
-    try:
-        # Add Redis connection test here if needed
-        logger.info("Redis connection check skipped (not implemented)")
-    except Exception as e:
-        error_msg = f"Redis connection failed: {e}"
-        logger.warning(error_msg)
-        startup_errors.append(error_msg)
-    
-    # Start call orchestration service
-    try:
-        await call_orchestration_service.start_orchestration()
-        logger.info("Call orchestration service started")
-    except Exception as e:
-        error_msg = f"Call orchestration service failed to start: {e}"
-        logger.error(error_msg)
-        startup_errors.append(error_msg)
-        
-        # Don't fail startup for orchestration service in development
-        if not settings.debug:
-            raise
-    
-    # Log startup summary
-    if startup_errors:
-        logger.warning(f"Application started with {len(startup_errors)} warnings:")
-        for error in startup_errors:
-            logger.warning(f"  - {error}")
-        if settings.debug:
-            logger.info("Running in development mode - some service failures are acceptable")
-    else:
-        logger.info("All services started successfully")
-    
-    yield
+        yield
+    finally:
+        # Shutdown
+        logger.info("Shutting down AI Dialer application")
+        continuous_learning_engine.stop_learning_engine()
+        learning_task.cancel()
+        try:
+            await learning_task
+        except asyncio.CancelledError:
+            pass
 
-    # Shutdown
-    logger.info("Shutting down Reach application")
-
-    # Stop call orchestration service
-    try:
-        await call_orchestration_service.stop_orchestration()
-        logger.info("Call orchestration service stopped")
-    except Exception as e:
-        logger.error(f"Error stopping call orchestration service: {e}")
-        # Don't fail shutdown for orchestration service
-
-# Create FastAPI app
+# Create FastAPI app with lifespan
 app = FastAPI(
-    title="Reach API",
-    description="AI-powered outbound voice platform with advanced optimization",
-    version="1.0.0",
+    title="AI Dialer - Conversational Voice Platform",
+    description="Enterprise-grade AI voice dialer with conversational training",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -1038,11 +986,39 @@ async def get_campaign_prompts(
     campaign_id: str,
     auto_generate: Optional[bool] = False,
     sales_script: Optional[str] = None,
-    industry: Optional[str] = None
+    industry: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
 ):
     """Get campaign prompts, with optional AI-powered generation from sales scripts"""
     try:
-        # Standard prompts structure
+        # First, try to get existing campaign prompts from database
+        campaign_stmt = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(campaign_stmt)
+        campaign = result.scalar_one_or_none()
+        
+        if campaign:
+            # If campaign exists and has AI-generated prompts, return them
+            if (campaign.greeting_prompt or campaign.qualification_prompt or 
+                campaign.presentation_prompt or campaign.objection_prompt or 
+                campaign.closing_prompt):
+                
+                prompts = {
+                    "greeting": campaign.greeting_prompt or "Hello, this is [Agent Name] calling from [Company]. How are you doing today?",
+                    "qualification": campaign.qualification_prompt or "I'm reaching out to homeowners in your area about [Product/Service]. Are you the homeowner?",
+                    "presentation": campaign.presentation_prompt or "Great! I wanted to share some information about [Key Benefit] that could help you [Solve Problem].",
+                    "objection_handling": campaign.objection_prompt or "I understand your concern about [Objection]. Let me explain how we address that...",
+                    "closing": campaign.closing_prompt or "Based on what you've told me, I think this could be a great fit. What would be the best time to schedule a consultation?",
+                    "transfer": "I'd like to connect you with our specialist who can provide more detailed information. Please hold while I transfer you."
+                }
+                
+                return {
+                    "success": True,
+                    "campaign_id": campaign_id,
+                    "prompts": prompts,
+                    "ai_generated": campaign.training_status == "completed"
+                }
+        
+        # Fallback to standard prompts if campaign not found or no prompts stored
         prompts = {
             "greeting": "Hello, this is [Agent Name] calling from [Company]. How are you doing today?",
             "qualification": "I'm reaching out to homeowners in your area about [Product/Service]. Are you the homeowner?",
@@ -1565,7 +1541,10 @@ class TemplateCustomizationRequest(BaseModel):
     customizations: Dict[str, Any] = {}
 
 @app.post("/guided-training/create-campaign", tags=["Guided Training"])
-async def create_guided_campaign(request: GuidedCampaignRequest):
+async def create_guided_campaign(
+    request: GuidedCampaignRequest,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Create a complete AI campaign from business objectives and sales script.
     This is the main guided training endpoint that transforms user inputs into
@@ -1600,10 +1579,9 @@ async def create_guided_campaign(request: GuidedCampaignRequest):
         )
         
         # Deploy campaign to database
-        async with get_db() as db:
-            campaign = await guided_training_service.deploy_campaign(
-                generated_campaign, db
-            )
+        campaign = await guided_training_service.deploy_campaign(
+            generated_campaign, db
+        )
         
         return {
             "success": True,
@@ -2393,6 +2371,89 @@ async def get_multi_agent_dashboard():
         logger.error(f"Failed to get multi-agent dashboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Add these endpoints after the existing endpoints
+
+@app.post("/conversational-training/start", tags=["Conversational Training"])
+async def start_conversational_training(user_id: str):
+    """Start a new conversational training session"""
+    try:
+        response = await conversational_ai_trainer.start_conversation(user_id)
+        return response
+    except Exception as e:
+        logger.error(f"Error starting conversational training: {e}")
+        raise HTTPException(status_code=500, detail="Failed to start conversation")
+
+@app.post("/conversational-training/continue", tags=["Conversational Training"])
+async def continue_conversational_training(
+    session_id: str,
+    message: str
+):
+    """Continue a conversational training session"""
+    try:
+        response = await conversational_ai_trainer.continue_conversation(session_id, message)
+        return response
+    except Exception as e:
+        logger.error(f"Error continuing conversation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to continue conversation")
+
+@app.get("/conversational-training/history/{session_id}", tags=["Conversational Training"])
+async def get_conversation_history(session_id: str):
+    """Get conversation history for a session"""
+    try:
+        if session_id in conversational_ai_trainer.active_sessions:
+            context = conversational_ai_trainer.active_sessions[session_id]
+            return {
+                "session_id": session_id,
+                "history": context.conversation_history,
+                "state": context.state.value,
+                "campaign_id": context.campaign_id
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
+    except Exception as e:
+        logger.error(f"Error getting conversation history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get history")
+
+@app.post("/learning/analyze-call", tags=["Learning Engine"])
+async def analyze_call_for_learning(call_log_id: str):
+    """Trigger learning analysis for a specific call"""
+    try:
+        await continuous_learning_engine.analyze_call_outcome(call_log_id)
+        return {"status": "success", "message": "Call analysis triggered"}
+    except Exception as e:
+        logger.error(f"Error analyzing call for learning: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze call")
+
+@app.post("/learning/trigger/{campaign_id}", tags=["Learning Engine"])
+async def trigger_campaign_learning(campaign_id: str):
+    """Trigger learning analysis for a campaign"""
+    try:
+        from app.services.continuous_learning_engine import LearningTrigger
+        await continuous_learning_engine.trigger_learning(campaign_id, LearningTrigger.MANUAL_TRIGGER)
+        return {"status": "success", "message": "Learning analysis triggered"}
+    except Exception as e:
+        logger.error(f"Error triggering learning: {e}")
+        raise HTTPException(status_code=500, detail="Failed to trigger learning")
+
+@app.get("/learning/insights/{campaign_id}", tags=["Learning Engine"])
+async def get_learning_insights(campaign_id: str):
+    """Get learning insights for a campaign"""
+    try:
+        insights = await continuous_learning_engine.get_learning_insights(campaign_id)
+        return {"campaign_id": campaign_id, "insights": insights}
+    except Exception as e:
+        logger.error(f"Error getting learning insights: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get insights")
+
+@app.get("/learning/optimizations/{campaign_id}", tags=["Learning Engine"])
+async def get_optimization_history(campaign_id: str):
+    """Get optimization history for a campaign"""
+    try:
+        history = await continuous_learning_engine.get_optimization_history(campaign_id)
+        return {"campaign_id": campaign_id, "optimizations": history}
+    except Exception as e:
+        logger.error(f"Error getting optimization history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get optimization history")
 
 # Add imports at the top of the file
 
