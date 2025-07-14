@@ -2,17 +2,18 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
+  Grid,
+  Paper,
+  Button,
+  Tab,
+  Tabs,
   Card,
   CardContent,
-  Button,
+  CardActions,
+  Chip,
   Alert,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Switch,
-  FormControlLabel
+  LinearProgress,
+  Divider
 } from '@mui/material';
 import {
   AutoAwesome,
@@ -23,10 +24,8 @@ import {
 import ConversationalTrainer from './ConversationalTrainer';
 
 const AITrainingView = () => {
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
-  const [showLearningInsights, setShowLearningInsights] = useState(false);
-  const [continuousLearning, setContinuousLearning] = useState(true);
-  const [autoOptimization, setAutoOptimization] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
+  const [isTraining, setIsTraining] = useState(false);
   const [learningStats, setLearningStats] = useState({});
 
   useEffect(() => {
@@ -36,292 +35,135 @@ const AITrainingView = () => {
 
   const loadLearningStats = async () => {
     try {
-      // Mock learning stats for now
-      setLearningStats({
-        totalOptimizations: 47,
-        averageImprovement: 23.5,
-        activeCampaigns: 12,
-        learningInsights: 156
-      });
+      const response = await fetch('/api/learning-stats');
+      const data = await response.json();
+      setLearningStats(data);
     } catch (error) {
       console.error('Error loading learning stats:', error);
     }
   };
 
-  const LearningInsightsDialog = () => (
-    <Dialog
-      open={showLearningInsights}
-      onClose={() => setShowLearningInsights(false)}
-      maxWidth="md"
-      fullWidth
-    >
-      <DialogTitle sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
-        🧠 AI Learning Insights
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ py: 2 }}>
-          <Alert 
-            severity="info" 
-            sx={{ 
-              mb: 2,
-              '& .MuiAlert-message': { color: '#FFD700' },
-              bgcolor: '#1A1A1A',
-              border: '1px solid #333'
-            }}
-          >
-            The AI continuously learns from every call to improve performance. Here's what it has learned:
-          </Alert>
-          
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 3 }}>
-            <Card sx={{ bgcolor: '#1A1A1A', border: '1px solid #333' }}>
-              <CardContent>
-                <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
-                  📈 Performance Improvements
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
-                  Total Optimizations: {learningStats.totalOptimizations}
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
-                  Average Improvement: {learningStats.averageImprovement}%
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#fff' }}>
-                  Active Learning Campaigns: {learningStats.activeCampaigns}
-                </Typography>
-              </CardContent>
-            </Card>
-            
-            <Card sx={{ bgcolor: '#1A1A1A', border: '1px solid #333' }}>
-              <CardContent>
-                <Typography variant="h6" sx={{ color: '#FFD700', mb: 2 }}>
-                  🎯 Key Patterns Found
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
-                  • Calls at 2-3 PM have 34% higher success rates
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#fff', mb: 1 }}>
-                  • Conversations with 2-3 objections perform best
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#fff' }}>
-                  • Friendly tone increases transfers by 28%
-                </Typography>
-              </CardContent>
-            </Card>
-          </Box>
-          
-          <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
-            Recent Optimizations Applied
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
+  const startTraining = async () => {
+    setIsTraining(true);
+    try {
+      // API call to start training
+      const response = await fetch('/api/start-training', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        console.log('Training started successfully');
+      }
+    } catch (error) {
+      console.error('Error starting training:', error);
+    } finally {
+      setIsTraining(false);
+    }
+  };
+
+  const renderOverview = () => (
+    <Grid container spacing={3}>
+      <Grid item xs={12} md={6}>
+        <Paper elevation={3} sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            <AutoAwesome color="primary" sx={{ mr: 1 }} />
+            AI Training Progress
           </Typography>
-          
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {[
-              'Optimized objection handling for solar campaigns (+15% success)',
-              'Adjusted conversation timing for insurance leads (+12% transfers)',
-              'Improved greeting scripts based on sentiment analysis (+8% engagement)',
-              'Enhanced transfer triggers for real estate campaigns (+19% conversions)'
-            ].map((optimization, index) => (
-              <Alert
-                key={index}
-                severity="success"
-                sx={{
-                  '& .MuiAlert-message': { color: '#00C851' },
-                  bgcolor: '#0A0A0A',
-                  border: '1px solid #00C851'
-                }}
-              >
-                {optimization}
-              </Alert>
-            ))}
+          <LinearProgress 
+            variant="determinate" 
+            value={learningStats.progress || 0} 
+            sx={{ mb: 2 }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            {learningStats.progress || 0}% Complete
+          </Typography>
+        </Paper>
+      </Grid>
+      
+      <Grid item xs={12} md={6}>
+        <Paper elevation={3} sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            <TrendingUp color="success" sx={{ mr: 1 }} />
+            Performance Metrics
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip 
+              label={`Success Rate: ${learningStats.successRate || 0}%`} 
+              color="success" 
+              size="small"
+            />
+            <Chip 
+              label={`Total Calls: ${learningStats.totalCalls || 0}`} 
+              color="primary" 
+              size="small"
+            />
+            <Chip 
+              label={`Conversions: ${learningStats.conversions || 0}`} 
+              color="secondary" 
+              size="small"
+            />
           </Box>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setShowLearningInsights(false)} sx={{ color: '#999' }}>
-          Close
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </Paper>
+      </Grid>
+    </Grid>
   );
 
-  const AdvancedOptionsDialog = () => (
-    <Dialog
-      open={showAdvancedOptions}
-      onClose={() => setShowAdvancedOptions(false)}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
-        ⚙️ Advanced Settings
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ py: 2 }}>
-          <Alert 
-            severity="info" 
-            sx={{ 
-              mb: 3,
-              '& .MuiAlert-message': { color: '#FFD700' },
-              bgcolor: '#1A1A1A',
-              border: '1px solid #333'
-            }}
-          >
-            These settings control how the AI learns and optimizes your campaigns automatically.
-          </Alert>
-          
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={continuousLearning}
-                  onChange={(e) => setContinuousLearning(e.target.checked)}
-                  sx={{
-                    '& .MuiSwitch-thumb': { backgroundColor: '#FFD700' },
-                    '& .MuiSwitch-track': { backgroundColor: '#333' }
-                  }}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body1" sx={{ color: '#FFD700', fontWeight: 'bold' }}>
-                    Continuous Learning
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#999' }}>
-                    AI analyzes every call and continuously improves performance
-                  </Typography>
-                </Box>
-              }
-            />
-            
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={autoOptimization}
-                  onChange={(e) => setAutoOptimization(e.target.checked)}
-                  sx={{
-                    '& .MuiSwitch-thumb': { backgroundColor: '#00C851' },
-                    '& .MuiSwitch-track': { backgroundColor: '#333' }
-                  }}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body1" sx={{ color: '#00C851', fontWeight: 'bold' }}>
-                    Auto-Optimization
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#999' }}>
-                    Automatically apply proven optimizations to improve results
-                  </Typography>
-                </Box>
-              }
-            />
-            
-            <Divider sx={{ my: 2, borderColor: '#333' }} />
-            
-            <Typography variant="body2" sx={{ color: '#999', fontStyle: 'italic' }}>
-              Note: These features work automatically. The conversational trainer handles all the technical complexity for you.
-            </Typography>
-          </Box>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setShowAdvancedOptions(false)} sx={{ color: '#999' }}>
-          Close
-        </Button>
-      </DialogActions>
-    </Dialog>
+  const renderTrainingInterface = () => (
+    <ConversationalTrainer />
+  );
+
+  const renderAnalytics = () => (
+    <Paper elevation={3} sx={{ p: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        <Psychology color="primary" sx={{ mr: 1 }} />
+        AI Learning Analytics
+      </Typography>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Detailed analytics will be available after training sessions
+      </Alert>
+      {/* Analytics content will be populated here */}
+    </Paper>
+  );
+
+  const renderSettings = () => (
+    <Paper elevation={3} sx={{ p: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        <Settings color="primary" sx={{ mr: 1 }} />
+        Training Settings
+      </Typography>
+      <Alert severity="info">
+        Configuration options for AI training parameters
+      </Alert>
+      {/* Settings content will be populated here */}
+    </Paper>
   );
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Header with learning status */}
-      <Box sx={{ 
-        bgcolor: '#0A0A0A', 
-        border: '1px solid #FFD700',
-        borderRadius: '8px 8px 0 0',
-        p: 2
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography
-            variant="h4"
-            sx={{
-              color: '#FFD700',
-              fontFamily: 'Playfair Display',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
-            }}
-          >
-            <AutoAwesome sx={{ color: '#FFD700' }} />
-            AI Training Center
-          </Typography>
-          
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<Psychology />}
-              onClick={() => setShowLearningInsights(true)}
-              sx={{
-                borderColor: '#00C851',
-                color: '#00C851',
-                '&:hover': { borderColor: '#00A142', color: '#00A142' }
-              }}
-            >
-              Learning Insights
-            </Button>
-            
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<Settings />}
-              onClick={() => setShowAdvancedOptions(true)}
-              sx={{
-                borderColor: '#999',
-                color: '#999',
-                '&:hover': { borderColor: '#FFD700', color: '#FFD700' }
-              }}
-            >
-              Settings
-            </Button>
-          </Box>
-        </Box>
-        
-        <Alert 
-          severity="success" 
-          sx={{ 
-            '& .MuiAlert-message': { color: '#00C851' },
-            bgcolor: '#0A0A0A',
-            border: '1px solid #00C851'
-          }}
-          icon={<TrendingUp />}
-        >
-          <Typography variant="body2">
-            <strong>AI Learning Active:</strong> {learningStats.totalOptimizations} optimizations applied, 
-            {learningStats.averageImprovement}% average improvement across {learningStats.activeCampaigns} campaigns
-          </Typography>
-        </Alert>
+    <Box sx={{ flexGrow: 1, p: 3 }}>
+      <Typography variant="h4" component="h1" gutterBottom>
+        AI Training Center
+      </Typography>
+      
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={activeTab} onChange={handleTabChange}>
+          <Tab label="Overview" />
+          <Tab label="Conversational Training" />
+          <Tab label="Analytics" />
+          <Tab label="Settings" />
+        </Tabs>
       </Box>
 
-      {/* Main conversational interface */}
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-        <ConversationalTrainer />
-      </Box>
-
-      {/* Footer info */}
-      <Box sx={{ 
-        bgcolor: '#0A0A0A', 
-        borderTop: '1px solid #333',
-        p: 2,
-        borderRadius: '0 0 8px 8px'
-      }}>
-        <Typography variant="caption" sx={{ color: '#999', textAlign: 'center', display: 'block' }}>
-          💡 The AI learns from every call to improve performance automatically. 
-          No technical configuration needed - just describe your goals naturally.
-        </Typography>
-      </Box>
-
-      {/* Dialogs */}
-      <LearningInsightsDialog />
-      <AdvancedOptionsDialog />
+      {activeTab === 0 && renderOverview()}
+      {activeTab === 1 && renderTrainingInterface()}
+      {activeTab === 2 && renderAnalytics()}
+      {activeTab === 3 && renderSettings()}
     </Box>
   );
 };
