@@ -18,10 +18,10 @@ class Settings(BaseSettings):
     aws_sns_topic_arn: Optional[str] = None
     
     # AWS Connect Configuration
-    aws_connect_instance_id: str = "placeholder-instance-id"
-    aws_connect_instance_arn: str = "arn:aws:connect:us-east-1:123456789012:instance/placeholder-instance-id"
-    aws_connect_contact_flow_id: str = "placeholder-contact-flow-id"
-    aws_connect_queue_id: str = "placeholder-queue-id"
+    aws_connect_instance_id: str = "8a6b58bb-5758-4e04-a09f-3b7aeb9119e3"
+    aws_connect_instance_arn: str = "arn:aws:connect:us-east-1:337909762852:instance/8a6b58bb-5758-4e04-a09f-3b7aeb9119e3"
+    aws_connect_contact_flow_id: str = "150bb773-0f56-4c39-b07e-d7861e1c1577"
+    aws_connect_queue_id: str = "093fa610-1b99-4484-8d46-04eb624b5715"
     webhook_base_url: str = "https://your-domain.com"
     
     # AI Services (optional for development)
