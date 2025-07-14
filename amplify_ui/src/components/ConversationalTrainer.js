@@ -7,18 +7,13 @@ import {
   TextField,
   Button,
   Paper,
-  List,
-  ListItem,
-  ListItemText,
   Avatar,
-  Divider,
   Chip,
   CircularProgress,
   Alert,
   LinearProgress,
   IconButton,
   Fade,
-  Slide,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,17 +24,8 @@ import {
   SmartToy,
   Person,
   AutoAwesome,
-  TrendingUp,
-  Psychology,
-  Launch,
   Assessment,
-  Lightbulb,
-  Speed,
-  CheckCircle,
-  Warning,
-  Info,
-  ShowChart,
-  Settings
+  ShowChart
 } from '@mui/icons-material';
 import axios from 'axios';
 

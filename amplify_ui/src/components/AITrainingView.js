@@ -17,11 +17,8 @@ import {
 import {
   AutoAwesome,
   Settings,
-  ShowChart,
   TrendingUp,
-  Psychology,
-  Info,
-  Warning
+  Psychology
 } from '@mui/icons-material';
 import ConversationalTrainer from './ConversationalTrainer';
 
@@ -30,24 +27,12 @@ const AITrainingView = () => {
   const [showLearningInsights, setShowLearningInsights] = useState(false);
   const [continuousLearning, setContinuousLearning] = useState(true);
   const [autoOptimization, setAutoOptimization] = useState(true);
-  const [campaigns, setCampaigns] = useState([]);
   const [learningStats, setLearningStats] = useState({});
 
   useEffect(() => {
-    // Load campaigns and learning stats
-    loadCampaigns();
+    // Load learning stats
     loadLearningStats();
   }, []);
-
-  const loadCampaigns = async () => {
-    try {
-      const response = await fetch('/api/campaigns');
-      const data = await response.json();
-      setCampaigns(data.campaigns || []);
-    } catch (error) {
-      console.error('Error loading campaigns:', error);
-    }
-  };
 
   const loadLearningStats = async () => {
     try {

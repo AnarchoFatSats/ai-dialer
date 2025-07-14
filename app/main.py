@@ -44,6 +44,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Service dependency functions
+def get_campaign_management_service():
+    """Get campaign management service dependency"""
+    from app.services.campaign_management import CampaignManagementService
+    return CampaignManagementService()
+
+def get_dnc_scrubbing_service():
+    """Get DNC scrubbing service dependency"""
+    from app.services.dnc_scrubbing import DNCScrubbingService
+    return DNCScrubbingService()
+
+def get_analytics_engine():
+    """Get analytics engine dependency"""
+    from app.services.analytics_engine import AnalyticsEngine
+    return AnalyticsEngine()
+
+def get_quality_scoring_service():
+    """Get quality scoring service dependency"""
+    from app.services.quality_scoring import QualityScoringService
+    return QualityScoringService()
+
+def get_cost_optimization_engine():
+    """Get cost optimization engine dependency"""
+    from app.services.cost_optimization import CostOptimizationEngine
+    return CostOptimizationEngine()
+
 # Pydantic models for API requests/responses
 
 

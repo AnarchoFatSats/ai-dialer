@@ -437,13 +437,15 @@ class ContinuousLearningEngine:
                 best_hours = sorted(hourly_data, key=lambda x: x['success_rate'], reverse=True)[:3]
                 
                 if best_hours[0]['success_rate'] > metrics.success_rate * 1.2:  # 20% better
+                    # Create hours string separately to avoid f-string nesting
+                    hours_str = ', '.join([f"{h['hour']}:00" for h in best_hours])
                     insight = LearningInsight(
                         insight_id=str(uuid.uuid4()),
                         campaign_id=metrics.campaign_id,
                         insight_type="timing",
                         confidence_score=0.8,
                         description=f"Calls at {best_hours[0]['hour']}:00 have {best_hours[0]['success_rate']:.1f}% success rate",
-                        recommendation=f"Focus calling efforts on hours: {', '.join([f'{h['hour']}:00' for h in best_hours])}",
+                        recommendation=f"Focus calling efforts on hours: {hours_str}",
                         data_points=sum(d['total_calls'] for d in hourly_data),
                         impact_estimate=0.18,
                         implementation_priority="high",
