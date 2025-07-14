@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from app.database import AsyncSessionLocal
 from app.models import (
     Campaign, Lead, CallLog, DIDPool, RealtimeMetrics,
-    CallStatus, CallDisposition, DIDStatus
+    CallStatus, CallDisposition, DIDStatus, CampaignStatus
 )
 from app.config import settings, AREA_CODE_MAPPING
 import pandas as pd
@@ -25,72 +25,68 @@ class AnalyticsEngine:
     """
 
     def __init__(self):
-        self.session = AsyncSessionLocal()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.session.close()
+        # Remove session initialization from __init__
+        pass
 
     async def get_realtime_dashboard(self) -> Dict[str, Any]:
         """
         Get real-time dashboard metrics across all campaigns.
         """
-        try:
-            # Active campaigns
-            active_campaigns = await self._get_active_campaigns_count()
+        async with AsyncSessionLocal() as session:
+            try:
+                # Active campaigns
+                active_campaigns = await self._get_active_campaigns_count(session)
 
-            # Current active calls
-            active_calls = await self._get_active_calls_count()
+                # Current active calls
+                active_calls = await self._get_active_calls_count(session)
 
-            # Hourly metrics
-            hourly_metrics = await self._get_hourly_metrics()
+                # Hourly metrics
+                hourly_metrics = await self._get_hourly_metrics(session)
 
-            # Cost metrics
-            cost_metrics = await self._get_realtime_cost_metrics()
+                # Cost metrics
+                cost_metrics = await self._get_realtime_cost_metrics(session)
 
-            # Quality metrics
-            quality_metrics = await self._get_realtime_quality_metrics()
+                # Quality metrics
+                quality_metrics = await self._get_realtime_quality_metrics(session)
 
-            # DID health metrics
-            did_health = await self._get_did_health_metrics()
+                # DID health metrics
+                did_health = await self._get_did_health_metrics(session)
 
-            # Performance alerts
-            alerts = await self._get_performance_alerts()
+                # Performance alerts
+                alerts = await self._get_performance_alerts(session)
 
-            return {
-                'timestamp': datetime.utcnow().isoformat(),
-                'active_campaigns': active_campaigns,
-                'active_calls': active_calls,
-                'hourly_metrics': hourly_metrics,
-                'cost_metrics': cost_metrics,
-                'quality_metrics': quality_metrics,
-                'did_health': did_health,
-                'alerts': alerts
-            }
+                return {
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'active_campaigns': active_campaigns,
+                    'active_calls': active_calls,
+                    'hourly_metrics': hourly_metrics,
+                    'cost_metrics': cost_metrics,
+                    'quality_metrics': quality_metrics,
+                    'did_health': did_health,
+                    'alerts': alerts
+                }
 
-        except Exception as e:
-            logger.error(f"Error getting real-time dashboard: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Error getting real-time dashboard: {e}")
+                raise
 
-    async def _get_active_campaigns_count(self) -> int:
+    async def _get_active_campaigns_count(self, session) -> int:
         """Get count of active campaigns."""
         stmt = select(func.count(Campaign.id)).where(
-            Campaign.status == 'active'
+            Campaign.status == CampaignStatus.ACTIVE
         )
-        result = await self.session.execute(stmt)
+        result = await session.execute(stmt)
         return result.scalar() or 0
 
-    async def _get_active_calls_count(self) -> int:
+    async def _get_active_calls_count(self, session) -> int:
         """Get count of currently active calls."""
         stmt = select(func.count(CallLog.id)).where(
-            CallLog.status.in_(['initiated', 'ringing', 'answered'])
+            CallLog.status.in_([CallStatus.INITIATED, CallStatus.RINGING, CallStatus.ANSWERED])
         )
-        result = await self.session.execute(stmt)
+        result = await session.execute(stmt)
         return result.scalar() or 0
 
-    async def _get_hourly_metrics(self) -> Dict[str, Any]:
+    async def _get_hourly_metrics(self, session) -> Dict[str, Any]:
         """Get hourly performance metrics."""
         now = datetime.utcnow()
         hour_ago = now - timedelta(hours=1)
@@ -99,7 +95,7 @@ class AnalyticsEngine:
         calls_stmt = select(func.count(CallLog.id)).where(
             CallLog.initiated_at >= hour_ago
         )
-        calls_result = await self.session.execute(calls_stmt)
+        calls_result = await session.execute(calls_stmt)
         calls_last_hour = calls_result.scalar() or 0
 
         # Answered calls in last hour
@@ -107,7 +103,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= hour_ago,
             CallLog.status == CallStatus.ANSWERED
         )
-        answered_result = await self.session.execute(answered_stmt)
+        answered_result = await session.execute(answered_stmt)
         answered_last_hour = answered_result.scalar() or 0
 
         # Transfers in last hour
@@ -115,7 +111,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= hour_ago,
             CallLog.disposition == CallDisposition.TRANSFER
         )
-        transfers_result = await self.session.execute(transfers_stmt)
+        transfers_result = await session.execute(transfers_stmt)
         transfers_last_hour = transfers_result.scalar() or 0
 
         # Calculate rates
@@ -136,7 +132,7 @@ class AnalyticsEngine:
             'transfer_rate': round(transfer_rate, 2)
         }
 
-    async def _get_realtime_cost_metrics(self) -> Dict[str, Any]:
+    async def _get_realtime_cost_metrics(self, session) -> Dict[str, Any]:
         """Get real-time cost metrics."""
         today = datetime.utcnow().date()
 
@@ -144,7 +140,7 @@ class AnalyticsEngine:
         cost_stmt = select(func.sum(CallLog.total_cost)).where(
             func.date(CallLog.initiated_at) == today
         )
-        cost_result = await self.session.execute(cost_stmt)
+        cost_result = await session.execute(cost_stmt)
         total_cost_today = cost_result.scalar() or 0
 
         # Average cost per minute
@@ -152,7 +148,7 @@ class AnalyticsEngine:
             func.date(CallLog.initiated_at) == today,
             CallLog.cost_per_minute.isnot(None)
         )
-        avg_cost_result = await self.session.execute(avg_cost_stmt)
+        avg_cost_result = await session.execute(avg_cost_stmt)
         avg_cost_per_minute = avg_cost_result.scalar() or 0
 
         # Budget utilization
@@ -166,7 +162,7 @@ class AnalyticsEngine:
             'target_cost_per_minute': settings.max_cost_per_minute
         }
 
-    async def _get_realtime_quality_metrics(self) -> Dict[str, Any]:
+    async def _get_realtime_quality_metrics(self, session) -> Dict[str, Any]:
         """Get real-time quality metrics."""
         hour_ago = datetime.utcnow() - timedelta(hours=1)
 
@@ -175,7 +171,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= hour_ago,
             CallLog.ai_response_time_ms.isnot(None)
         )
-        ai_response_result = await self.session.execute(ai_response_stmt)
+        ai_response_result = await session.execute(ai_response_stmt)
         avg_ai_response = ai_response_result.scalar() or 0
 
         # Average audio quality
@@ -183,7 +179,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= hour_ago,
             CallLog.audio_quality_score.isnot(None)
         )
-        audio_quality_result = await self.session.execute(audio_quality_stmt)
+        audio_quality_result = await session.execute(audio_quality_stmt)
         avg_audio_quality = audio_quality_result.scalar() or 0
 
         # Average confidence score
@@ -191,7 +187,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= hour_ago,
             CallLog.ai_confidence_score.isnot(None)
         )
-        confidence_result = await self.session.execute(confidence_stmt)
+        confidence_result = await session.execute(confidence_stmt)
         avg_confidence = confidence_result.scalar() or 0
 
         return {
@@ -201,7 +197,7 @@ class AnalyticsEngine:
             'target_ai_response_time': 800  # 800ms target
         }
 
-    async def _get_did_health_metrics(self) -> Dict[str, Any]:
+    async def _get_did_health_metrics(self, session) -> Dict[str, Any]:
         """Get DID health and reputation metrics."""
         # Count DIDs by status
         did_status_stmt = select(
@@ -209,21 +205,21 @@ class AnalyticsEngine:
             func.count(DIDPool.id)
         ).group_by(DIDPool.status)
 
-        did_status_result = await self.session.execute(did_status_stmt)
+        did_status_result = await session.execute(did_status_stmt)
         did_status_counts = dict(did_status_result.fetchall())
 
         # Average spam score
         spam_score_stmt = select(func.avg(DIDPool.spam_score)).where(
             DIDPool.status == DIDStatus.CLEAN
         )
-        spam_score_result = await self.session.execute(spam_score_stmt)
+        spam_score_result = await session.execute(spam_score_stmt)
         avg_spam_score = spam_score_result.scalar() or 0
 
         # DIDs approaching limits
         approaching_limit_stmt = select(func.count(DIDPool.id)).where(
             DIDPool.calls_today >= settings.max_calls_per_did_daily * 0.8
         )
-        approaching_limit_result = await self.session.execute(approaching_limit_stmt)
+        approaching_limit_result = await session.execute(approaching_limit_stmt)
         approaching_limit = approaching_limit_result.scalar() or 0
 
         return {
@@ -236,7 +232,7 @@ class AnalyticsEngine:
             'approaching_limit': approaching_limit
         }
 
-    async def _get_performance_alerts(self) -> List[Dict[str, Any]]:
+    async def _get_performance_alerts(self, session) -> List[Dict[str, Any]]:
         """Get performance alerts that need attention."""
         alerts = []
 
@@ -247,7 +243,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= hour_ago,
             CallLog.cost_per_minute.isnot(None)
         )
-        high_cost_result = await self.session.execute(high_cost_stmt)
+        high_cost_result = await session.execute(high_cost_stmt)
         avg_cost = high_cost_result.scalar() or 0
 
         if avg_cost > settings.max_cost_per_minute:
@@ -259,7 +255,7 @@ class AnalyticsEngine:
             })
 
         # Check for low answer rates
-        hourly_metrics = await self._get_hourly_metrics()
+        hourly_metrics = await self._get_hourly_metrics(session)
         if hourly_metrics['answer_rate'] < 15:
             alerts.append({
                 'type': 'answer_rate_alert',
@@ -269,7 +265,7 @@ class AnalyticsEngine:
             })
 
         # Check for DID issues
-        did_health = await self._get_did_health_metrics()
+        did_health = await self._get_did_health_metrics(session)
         if did_health['red_dids'] > 0:
             alerts.append({
                 'type': 'did_reputation_alert',
@@ -285,61 +281,62 @@ class AnalyticsEngine:
         """
         Get comprehensive analytics for a specific campaign.
         """
-        try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+        async with AsyncSessionLocal() as session:
+            try:
+                start_date = datetime.utcnow() - timedelta(days=days)
 
-            # Basic metrics
-            basic_metrics = await self._get_campaign_basic_metrics(campaign_id, start_date)
+                # Basic metrics
+                basic_metrics = await self._get_campaign_basic_metrics(session, campaign_id, start_date)
 
-            # Time-based analysis
-            time_analysis = await self._get_campaign_time_analysis(campaign_id, start_date)
+                # Time-based analysis
+                time_analysis = await self._get_campaign_time_analysis(session, campaign_id, start_date)
 
-            # Geographic analysis
-            geo_analysis = await self._get_campaign_geo_analysis(campaign_id, start_date)
+                # Geographic analysis
+                geo_analysis = await self._get_campaign_geo_analysis(session, campaign_id, start_date)
 
-            # Conversion funnel
-            conversion_funnel = await self._get_campaign_conversion_funnel(campaign_id, start_date)
+                # Conversion funnel
+                conversion_funnel = await self._get_campaign_conversion_funnel(session, campaign_id, start_date)
 
-            # Lead scoring analysis
-            lead_scoring = await self._get_campaign_lead_scoring_analysis(campaign_id, start_date)
+                # Lead scoring analysis
+                lead_scoring = await self._get_campaign_lead_scoring_analysis(session, campaign_id, start_date)
 
-            # Optimization opportunities
-            optimization_opportunities = await self._get_campaign_optimization_opportunities(campaign_id, start_date)
+                # Optimization opportunities
+                optimization_opportunities = await self._get_campaign_optimization_opportunities(session, campaign_id, start_date)
 
-            return {
-                'campaign_id': str(campaign_id),
-                'analysis_period': {
-                    'start_date': start_date.isoformat(),
-                    'end_date': datetime.utcnow().isoformat(),
-                    'days': days
-                },
-                'basic_metrics': basic_metrics,
-                'time_analysis': time_analysis,
-                'geo_analysis': geo_analysis,
-                'conversion_funnel': conversion_funnel,
-                'lead_scoring': lead_scoring,
-                'optimization_opportunities': optimization_opportunities
-            }
+                return {
+                    'campaign_id': str(campaign_id),
+                    'analysis_period': {
+                        'start_date': start_date.isoformat(),
+                        'end_date': datetime.utcnow().isoformat(),
+                        'days': days
+                    },
+                    'basic_metrics': basic_metrics,
+                    'time_analysis': time_analysis,
+                    'geo_analysis': geo_analysis,
+                    'conversion_funnel': conversion_funnel,
+                    'lead_scoring': lead_scoring,
+                    'optimization_opportunities': optimization_opportunities
+                }
 
-        except Exception as e:
-            logger.error(f"Error getting campaign analytics: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Error getting campaign analytics: {e}")
+                raise
 
     async def _get_campaign_basic_metrics(
-            self, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
         """Get basic campaign metrics."""
         # Total calls
         total_calls_stmt = select(func.count(CallLog.id)).where(
             CallLog.campaign_id == campaign_id,
             CallLog.initiated_at >= start_date
         )
-        total_calls_result = await self.session.execute(total_calls_stmt)
+        total_calls_result = await session.execute(total_calls_stmt)
         total_calls = total_calls_result.scalar() or 0
 
         # Unique leads contacted
         unique_leads_stmt = select(func.count(func.distinct(CallLog.lead_id))).where(
             CallLog.campaign_id == campaign_id, CallLog.initiated_at >= start_date)
-        unique_leads_result = await self.session.execute(unique_leads_stmt)
+        unique_leads_result = await session.execute(unique_leads_stmt)
         unique_leads = unique_leads_result.scalar() or 0
 
         # Conversion metrics
@@ -348,7 +345,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= start_date,
             CallLog.disposition == CallDisposition.TRANSFER
         )
-        transfers_result = await self.session.execute(transfers_stmt)
+        transfers_result = await session.execute(transfers_stmt)
         transfers = transfers_result.scalar() or 0
 
         # Cost metrics
@@ -356,7 +353,7 @@ class AnalyticsEngine:
             CallLog.campaign_id == campaign_id,
             CallLog.initiated_at >= start_date
         )
-        total_cost_result = await self.session.execute(total_cost_stmt)
+        total_cost_result = await session.execute(total_cost_stmt)
         total_cost = total_cost_result.scalar() or 0
 
         return {
@@ -374,7 +371,7 @@ class AnalyticsEngine:
                 4) if transfers > 0 else 0}
 
     async def _get_campaign_time_analysis(
-            self, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
         """Get time-based performance analysis."""
         # Hourly performance
         hourly_stmt = select(
@@ -392,7 +389,7 @@ class AnalyticsEngine:
                                 CallLog.campaign_id == campaign_id,
             CallLog.initiated_at >= start_date).group_by('hour').order_by('hour')
 
-        hourly_result = await self.session.execute(hourly_stmt)
+        hourly_result = await session.execute(hourly_stmt)
         hourly_data = []
 
         for row in hourly_result:
@@ -426,7 +423,7 @@ class AnalyticsEngine:
                                     CallLog.campaign_id == campaign_id,
             CallLog.initiated_at >= start_date).group_by('date').order_by('date')
 
-        daily_result = await self.session.execute(daily_stmt)
+        daily_result = await session.execute(daily_stmt)
         daily_data = []
 
         for row in daily_result:
@@ -450,7 +447,7 @@ class AnalyticsEngine:
         }
 
     async def _get_campaign_geo_analysis(
-            self, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
         """Get geographic performance analysis."""
         # Performance by area code
         area_code_stmt = select(
@@ -470,7 +467,7 @@ class AnalyticsEngine:
                                         func.count(
                                             CallLog.id).desc())
 
-        area_code_result = await self.session.execute(area_code_stmt)
+        area_code_result = await session.execute(area_code_stmt)
         area_code_data = []
 
         for row in area_code_result:
@@ -497,20 +494,20 @@ class AnalyticsEngine:
         }
 
     async def _get_campaign_conversion_funnel(
-            self, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
         """Get conversion funnel analysis."""
         # Total leads
         total_leads_stmt = select(func.count(Lead.id)).where(
             Lead.campaign_id == campaign_id,
             Lead.created_at >= start_date
         )
-        total_leads_result = await self.session.execute(total_leads_stmt)
+        total_leads_result = await session.execute(total_leads_stmt)
         total_leads = total_leads_result.scalar() or 0
 
         # Contacted leads
         contacted_leads_stmt = select(func.count(func.distinct(CallLog.lead_id))).where(
             CallLog.campaign_id == campaign_id, CallLog.initiated_at >= start_date)
-        contacted_leads_result = await self.session.execute(contacted_leads_stmt)
+        contacted_leads_result = await session.execute(contacted_leads_stmt)
         contacted_leads = contacted_leads_result.scalar() or 0
 
         # Answered calls
@@ -519,7 +516,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= start_date,
             CallLog.status == CallStatus.ANSWERED
         )
-        answered_calls_result = await self.session.execute(answered_calls_stmt)
+        answered_calls_result = await session.execute(answered_calls_stmt)
         answered_calls = answered_calls_result.scalar() or 0
 
         # Qualified leads
@@ -528,7 +525,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= start_date,
             CallLog.disposition == CallDisposition.QUALIFIED
         )
-        qualified_leads_result = await self.session.execute(qualified_leads_stmt)
+        qualified_leads_result = await session.execute(qualified_leads_stmt)
         qualified_leads = qualified_leads_result.scalar() or 0
 
         # Transfers
@@ -537,7 +534,7 @@ class AnalyticsEngine:
             CallLog.initiated_at >= start_date,
             CallLog.disposition == CallDisposition.TRANSFER
         )
-        transfers_result = await self.session.execute(transfers_stmt)
+        transfers_result = await session.execute(transfers_stmt)
         transfers = transfers_result.scalar() or 0
 
         # Calculate conversion rates
@@ -571,7 +568,7 @@ class AnalyticsEngine:
         }
 
     async def _get_campaign_lead_scoring_analysis(
-            self, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID, start_date: datetime) -> Dict[str, Any]:
         """Get lead scoring performance analysis."""
         # Performance by score ranges
         score_ranges = [
@@ -599,7 +596,7 @@ class AnalyticsEngine:
                                 Lead.score >= min_score,
                 Lead.score < max_score)
 
-            result = await self.session.execute(performance_stmt)
+            result = await session.execute(performance_stmt)
             calls, answered, transfers = result.fetchone()
 
             answer_rate = (answered / calls * 100) if calls > 0 else 0
@@ -620,12 +617,12 @@ class AnalyticsEngine:
         }
 
     async def _get_campaign_optimization_opportunities(
-            self, campaign_id: uuid.UUID, start_date: datetime) -> List[Dict[str, Any]]:
+            self, session, campaign_id: uuid.UUID, start_date: datetime) -> List[Dict[str, Any]]:
         """Get optimization opportunities for the campaign."""
         opportunities = []
 
         # Analyze time-based opportunities
-        time_analysis = await self._get_campaign_time_analysis(campaign_id, start_date)
+        time_analysis = await self._get_campaign_time_analysis(session, campaign_id, start_date)
 
         # Find best performing hours
         best_hours = sorted(
@@ -645,7 +642,7 @@ class AnalyticsEngine:
             })
 
         # Analyze geographic opportunities
-        geo_analysis = await self._get_campaign_geo_analysis(campaign_id, start_date)
+        geo_analysis = await self._get_campaign_geo_analysis(session, campaign_id, start_date)
 
         # Find underperforming area codes
         underperforming_areas = [
@@ -664,7 +661,7 @@ class AnalyticsEngine:
             })
 
         # Analyze lead scoring opportunities
-        lead_scoring = await self._get_campaign_lead_scoring_analysis(campaign_id, start_date)
+        lead_scoring = await self._get_campaign_lead_scoring_analysis(session, campaign_id, start_date)
 
         # Check if high-score leads are performing better
         high_score_performance = next(
@@ -691,66 +688,68 @@ class AnalyticsEngine:
         """
         Record a real-time metric for monitoring.
         """
-        try:
-            metric = RealtimeMetrics(
-                metric_name=metric_name,
-                metric_value=metric_value,
-                metric_type='gauge',
-                campaign_id=campaign_id,
-                area_code=area_code,
-                hour_of_day=datetime.utcnow().hour
-            )
+        async with AsyncSessionLocal() as session:
+            try:
+                metric = RealtimeMetrics(
+                    metric_name=metric_name,
+                    metric_value=metric_value,
+                    metric_type='gauge',
+                    campaign_id=campaign_id,
+                    area_code=area_code,
+                    hour_of_day=datetime.utcnow().hour
+                )
 
-            self.session.add(metric)
-            await self.session.commit()
+                session.add(metric)
+                await session.commit()
 
-        except Exception as e:
-            logger.error(f"Error recording metric {metric_name}: {e}")
-            await self.session.rollback()
+            except Exception as e:
+                logger.error(f"Error recording metric {metric_name}: {e}")
+                await session.rollback()
 
     async def get_predictive_insights(
             self, campaign_id: uuid.UUID) -> Dict[str, Any]:
         """
         Get predictive insights for campaign optimization.
         """
-        try:
-            # Get historical performance data
-            historical_data = await self._get_campaign_historical_data(campaign_id)
+        async with AsyncSessionLocal() as session:
+            try:
+                # Get historical performance data
+                historical_data = await self._get_campaign_historical_data(session, campaign_id)
 
-            # Predict optimal call times
-            optimal_times = await self._predict_optimal_call_times(historical_data)
+                # Predict optimal call times
+                optimal_times = await self._predict_optimal_call_times(session, historical_data)
 
-            # Predict lead conversion likelihood
-            lead_predictions = await self._predict_lead_conversion_likelihood(campaign_id)
+                # Predict lead conversion likelihood
+                lead_predictions = await self._predict_lead_conversion_likelihood(session, campaign_id)
 
-            # Predict budget requirements
-            budget_predictions = await self._predict_budget_requirements(campaign_id)
+                # Predict budget requirements
+                budget_predictions = await self._predict_budget_requirements(session, campaign_id)
 
-            # Predict DID performance
-            did_predictions = await self._predict_did_performance(campaign_id)
+                # Predict DID performance
+                did_predictions = await self._predict_did_performance(session, campaign_id)
 
-            return {
-                'campaign_id': str(campaign_id),
-                'generated_at': datetime.utcnow().isoformat(),
-                'optimal_call_times': optimal_times,
-                'lead_predictions': lead_predictions,
-                'budget_predictions': budget_predictions,
-                'did_predictions': did_predictions
-            }
+                return {
+                    'campaign_id': str(campaign_id),
+                    'generated_at': datetime.utcnow().isoformat(),
+                    'optimal_call_times': optimal_times,
+                    'lead_predictions': lead_predictions,
+                    'budget_predictions': budget_predictions,
+                    'did_predictions': did_predictions
+                }
 
-        except Exception as e:
-            logger.error(f"Error getting predictive insights: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Error getting predictive insights: {e}")
+                raise
 
     async def _get_campaign_historical_data(
-            self, campaign_id: uuid.UUID) -> pd.DataFrame:
+            self, session, campaign_id: uuid.UUID) -> pd.DataFrame:
         """Get historical campaign data for analysis."""
         # This would fetch historical data and return as DataFrame
         # For now, return empty DataFrame
         return pd.DataFrame()
 
     async def _predict_optimal_call_times(
-            self, historical_data: pd.DataFrame) -> Dict[str, Any]:
+            self, session, historical_data: pd.DataFrame) -> Dict[str, Any]:
         """Predict optimal call times based on historical data."""
         # Simplified prediction logic
         return {
@@ -760,7 +759,7 @@ class AnalyticsEngine:
         }
 
     async def _predict_lead_conversion_likelihood(
-            self, campaign_id: uuid.UUID) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID) -> Dict[str, Any]:
         """Predict lead conversion likelihood."""
         # Simplified prediction
         return {
@@ -771,7 +770,7 @@ class AnalyticsEngine:
         }
 
     async def _predict_budget_requirements(
-            self, campaign_id: uuid.UUID) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID) -> Dict[str, Any]:
         """Predict budget requirements for campaign."""
         return {
             'daily_budget_recommendation': 1000.0,
@@ -780,15 +779,13 @@ class AnalyticsEngine:
         }
 
     async def _predict_did_performance(
-            self, campaign_id: uuid.UUID) -> Dict[str, Any]:
+            self, session, campaign_id: uuid.UUID) -> Dict[str, Any]:
         """Predict DID performance and rotation needs."""
         return {
             'dids_needing_rotation': 0,
             'optimal_rotation_schedule': 'daily',
             'reputation_risk_score': 0.25
         }
-
-# Async context manager for analytics engine
 
 
 def get_analytics_engine():

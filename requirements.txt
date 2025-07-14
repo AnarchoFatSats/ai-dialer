@@ -9,6 +9,7 @@ mangum==0.17.0
 sqlalchemy==2.0.23
 asyncpg==0.29.0
 alembic==1.12.1
+greenlet==3.0.3
 
 # HTTP Client
 aiohttp==3.9.1
