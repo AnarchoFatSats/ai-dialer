@@ -36,6 +36,11 @@ from app.services.did_management import did_management_service
 from sqlalchemy import func, and_, select, text, update
 from sqlalchemy.orm import selectinload
 from uuid import UUID
+from app.services.guided_training import (
+    guided_training_service, BusinessObjective, BrandPersonality, 
+    IndustryType, SalesStyle, GeneratedCampaign
+)
+from app.services.campaign_templates import CampaignTemplateLibrary, TemplateType
 
 # Configure logging
 logging.basicConfig(
@@ -1332,6 +1337,375 @@ async def deploy_conversation_template(campaign_id: str, template_data: dict):
 
         return {
             "message": f"Template '{template['name']}' deployed successfully"}
+
+# =============================================================================
+# GUIDED TRAINING ENDPOINTS
+# User-friendly campaign creation from business objectives and sales scripts
+# =============================================================================
+
+class GuidedCampaignRequest(BaseModel):
+    """Request model for guided campaign creation"""
+    # Business Objectives
+    primary_goal: str  # "book appointments", "generate leads", "close sales"
+    target_audience: str  # "homeowners with high electric bills"
+    success_metrics: List[str]  # ["50 appointments/week", "$20K+ prospects"]
+    budget_constraints: Dict[str, float] = {"max_cost_per_lead": 25.0}
+    timeline: str = "ongoing"  # "6 months", "ongoing"
+    
+    # Sales Script
+    sales_script: str
+    
+    # Brand Personality
+    brand_tone: str = "professional"  # "professional", "friendly", "authoritative"
+    brand_pace: str = "medium"  # "fast", "medium", "slow"
+    brand_formality: str = "conversational"  # "formal", "casual", "conversational"
+    energy_level: str = "medium"  # "high", "medium", "low"
+    empathy_level: str = "high"  # "high", "medium", "low"
+    
+    # Industry
+    industry: str = "general"  # "solar", "insurance", "real_estate", "saas", etc.
+    
+    # Optional: Use template as starting point
+    template_id: Optional[str] = None
+
+class TemplateCustomizationRequest(BaseModel):
+    """Request model for template customization"""
+    template_id: str
+    business_objective: Dict[str, Any]
+    customizations: Dict[str, Any] = {}
+
+@app.post("/guided-training/create-campaign", tags=["Guided Training"])
+async def create_guided_campaign(request: GuidedCampaignRequest):
+    """
+    Create a complete AI campaign from business objectives and sales script.
+    This is the main guided training endpoint that transforms user inputs into
+    a ready-to-deploy campaign.
+    """
+    try:
+        # Convert request to internal models
+        objectives = BusinessObjective(
+            primary_goal=request.primary_goal,
+            target_audience=request.target_audience,
+            success_metrics=request.success_metrics,
+            budget_constraints=request.budget_constraints,
+            timeline=request.timeline
+        )
+        
+        brand_personality = BrandPersonality(
+            tone=request.brand_tone,
+            pace=request.brand_pace,
+            formality=request.brand_formality,
+            energy_level=request.energy_level,
+            empathy_level=request.empathy_level
+        )
+        
+        industry = IndustryType(request.industry)
+        
+        # Generate campaign using guided training service
+        generated_campaign = await guided_training_service.create_guided_campaign(
+            objectives=objectives,
+            sales_script=request.sales_script,
+            brand_personality=brand_personality,
+            industry=industry
+        )
+        
+        # Deploy campaign to database
+        async with get_db() as db:
+            campaign = await guided_training_service.deploy_campaign(
+                generated_campaign, db
+            )
+        
+        return {
+            "success": True,
+            "campaign_id": str(campaign.id),
+            "campaign_name": campaign.name,
+            "message": "Campaign created successfully from guided training",
+            "configuration": {
+                "conversation_flow": generated_campaign.conversation_flow,
+                "voice_settings": generated_campaign.voice_settings,
+                "objection_handlers": generated_campaign.objection_handlers,
+                "qualification_criteria": generated_campaign.qualification_criteria,
+                "transfer_triggers": generated_campaign.transfer_triggers,
+                "success_metrics": generated_campaign.success_metrics
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating guided campaign: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/guided-training/analyze-script", tags=["Guided Training"])
+async def analyze_sales_script(sales_script: str, industry: str = "general"):
+    """
+    Analyze a sales script to extract key components.
+    This endpoint helps users understand how their script will be interpreted.
+    """
+    try:
+        industry_type = IndustryType(industry)
+        
+        # Analyze script using guided training service
+        analyzed_script = await guided_training_service._analyze_sales_script(
+            sales_script, industry_type
+        )
+        
+        return {
+            "success": True,
+            "analysis": {
+                "greeting": analyzed_script.greeting,
+                "value_proposition": analyzed_script.value_proposition,
+                "qualification_questions": analyzed_script.qualification_questions,
+                "objection_responses": analyzed_script.objection_responses,
+                "closing_statements": analyzed_script.closing_statements,
+                "key_benefits": analyzed_script.key_benefits,
+                "pain_points": analyzed_script.pain_points,
+                "call_to_action": analyzed_script.call_to_action
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing sales script: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/guided-training/templates", tags=["Guided Training"])
+async def get_campaign_templates(industry: Optional[str] = None, style: Optional[str] = None):
+    """
+    Get available campaign templates filtered by industry or style.
+    """
+    try:
+        if industry:
+            industry_type = IndustryType(industry)
+            templates = CampaignTemplateLibrary.get_templates_by_industry(industry_type)
+        elif style:
+            sales_style = SalesStyle(style)
+            templates = CampaignTemplateLibrary.get_templates_by_style(sales_style)
+        else:
+            templates = list(CampaignTemplateLibrary.get_all_templates().values())
+            # Add template IDs
+            for i, (key, template) in enumerate(CampaignTemplateLibrary.get_all_templates().items()):
+                templates[i]["template_id"] = key
+        
+        return {
+            "success": True,
+            "templates": templates,
+            "total_count": len(templates)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting campaign templates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/guided-training/customize-template", tags=["Guided Training"])
+async def customize_template(request: TemplateCustomizationRequest):
+    """
+    Customize a template based on specific business objectives.
+    """
+    try:
+        # Get the template
+        templates = CampaignTemplateLibrary.get_all_templates()
+        if request.template_id not in templates:
+            raise HTTPException(status_code=404, detail="Template not found")
+        
+        template = templates[request.template_id]
+        
+        # Convert business objective
+        objective = BusinessObjective(
+            primary_goal=request.business_objective.get("primary_goal", ""),
+            target_audience=request.business_objective.get("target_audience", ""),
+            success_metrics=request.business_objective.get("success_metrics", []),
+            budget_constraints=request.business_objective.get("budget_constraints", {}),
+            timeline=request.business_objective.get("timeline", "ongoing")
+        )
+        
+        # Customize template
+        customized_template = CampaignTemplateLibrary.customize_template(
+            template, objective, request.customizations.get("industry_context")
+        )
+        
+        return {
+            "success": True,
+            "customized_template": customized_template,
+            "message": "Template customized successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error customizing template: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/guided-training/preview-campaign", tags=["Guided Training"])
+async def preview_campaign_configuration(request: GuidedCampaignRequest):
+    """
+    Preview what a campaign configuration would look like without creating it.
+    This allows users to see the generated prompts, voice settings, etc. before deploying.
+    """
+    try:
+        # Convert request to internal models
+        objectives = BusinessObjective(
+            primary_goal=request.primary_goal,
+            target_audience=request.target_audience,
+            success_metrics=request.success_metrics,
+            budget_constraints=request.budget_constraints,
+            timeline=request.timeline
+        )
+        
+        brand_personality = BrandPersonality(
+            tone=request.brand_tone,
+            pace=request.brand_pace,
+            formality=request.brand_formality,
+            energy_level=request.energy_level,
+            empathy_level=request.empathy_level
+        )
+        
+        industry = IndustryType(request.industry)
+        
+        # Generate campaign preview
+        generated_campaign = await guided_training_service.create_guided_campaign(
+            objectives=objectives,
+            sales_script=request.sales_script,
+            brand_personality=brand_personality,
+            industry=industry
+        )
+        
+        return {
+            "success": True,
+            "preview": {
+                "campaign_name": generated_campaign.name,
+                "description": generated_campaign.description,
+                "conversation_flow": generated_campaign.conversation_flow,
+                "ai_prompts": generated_campaign.ai_prompts,
+                "voice_settings": generated_campaign.voice_settings,
+                "objection_handlers": generated_campaign.objection_handlers,
+                "qualification_criteria": generated_campaign.qualification_criteria,
+                "transfer_triggers": generated_campaign.transfer_triggers,
+                "success_metrics": generated_campaign.success_metrics
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error previewing campaign: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/guided-training/industries", tags=["Guided Training"])
+async def get_supported_industries():
+    """
+    Get list of supported industries for guided training.
+    """
+    try:
+        industries = [
+            {
+                "value": industry.value,
+                "label": industry.value.replace("_", " ").title(),
+                "description": f"Optimized for {industry.value.replace('_', ' ')} sales"
+            }
+            for industry in IndustryType
+        ]
+        
+        return {
+            "success": True,
+            "industries": industries
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting industries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/guided-training/styles", tags=["Guided Training"])
+async def get_supported_styles():
+    """
+    Get list of supported sales styles for guided training.
+    """
+    try:
+        styles = [
+            {
+                "value": style.value,
+                "label": style.value.replace("_", " ").title(),
+                "description": f"{style.value.replace('_', ' ').title()} approach"
+            }
+            for style in SalesStyle
+        ]
+        
+        return {
+            "success": True,
+            "styles": styles
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting styles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/guided-training/generate-objections", tags=["Guided Training"])
+async def generate_objection_responses(
+    sales_script: str,
+    brand_tone: str = "professional",
+    industry: str = "general"
+):
+    """
+    Generate objection responses based on a sales script and brand personality.
+    """
+    try:
+        brand_personality = BrandPersonality(
+            tone=brand_tone,
+            pace="medium",
+            formality="conversational",
+            energy_level="medium",
+            empathy_level="high"
+        )
+        
+        industry_type = IndustryType(industry)
+        
+        # Analyze script to get objection responses
+        analyzed_script = await guided_training_service._analyze_sales_script(
+            sales_script, industry_type
+        )
+        
+        # Generate objection handlers
+        objection_handlers = await guided_training_service._generate_objection_handlers(
+            analyzed_script, brand_personality
+        )
+        
+        return {
+            "success": True,
+            "objection_responses": objection_handlers,
+            "script_objections": analyzed_script.objection_responses
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating objection responses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/guided-training/suggest-voice", tags=["Guided Training"])
+async def suggest_voice_settings(
+    brand_tone: str = "professional",
+    brand_pace: str = "medium",
+    industry: str = "general"
+):
+    """
+    Get suggested voice settings based on brand personality and industry.
+    """
+    try:
+        brand_personality = BrandPersonality(
+            tone=brand_tone,
+            pace=brand_pace,
+            formality="conversational",
+            energy_level="medium",
+            empathy_level="high"
+        )
+        
+        industry_type = IndustryType(industry)
+        
+        # Get voice settings
+        voice_settings = await guided_training_service._configure_voice_settings(
+            brand_personality, industry_type
+        )
+        
+        return {
+            "success": True,
+            "voice_settings": voice_settings,
+            "recommendation_reason": f"Optimized for {brand_tone} tone and {industry} industry"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error suggesting voice settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Multi-Agent System API Endpoints
 
