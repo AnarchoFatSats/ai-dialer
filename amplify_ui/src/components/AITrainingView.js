@@ -31,7 +31,11 @@ import {
   Paper,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent
 } from '@mui/material';
 import {
   Psychology,
@@ -55,7 +59,15 @@ import {
   Assignment,
   CheckCircle,
   Warning,
-  Info
+  Info,
+  AutoAwesome,
+  Business,
+  Description,
+  VoiceChat,
+  Preview,
+  Launch,
+  Assessment,
+  Security
 } from '@mui/icons-material';
 
 const AITrainingView = () => {
@@ -759,6 +771,252 @@ Key Instructions:
     </Grid>
   );
 
+  const renderGuidedTraining = () => (
+    <Grid container spacing={3}>
+      <Grid item xs={12} md={8}>
+        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+              <AutoAwesome sx={{ color: '#FFD700', fontSize: 32 }} />
+              <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
+                🧠 Guided AI Training
+              </Typography>
+            </Box>
+            
+            <Typography variant="body1" sx={{ color: '#FFD700', mb: 3 }}>
+              Create sophisticated AI campaigns in minutes! Just paste your sales script and describe your goals.
+              The AI will automatically generate optimized prompts, voice settings, and objection handlers.
+            </Typography>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card sx={{ background: '#111', border: '1px solid #333', mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
+                      📋 Business Objectives
+                    </Typography>
+                    
+                    <TextField
+                      fullWidth
+                      label="Primary Goal"
+                      placeholder="e.g., book solar consultations"
+                      sx={{ mb: 2, '& .MuiInputLabel-root': { color: '#FFD700' } }}
+                    />
+                    
+                    <TextField
+                      fullWidth
+                      label="Target Audience"
+                      placeholder="e.g., homeowners with high electric bills"
+                      sx={{ mb: 2, '& .MuiInputLabel-root': { color: '#FFD700' } }}
+                    />
+                    
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                      <InputLabel sx={{ color: '#FFD700' }}>Industry</InputLabel>
+                      <Select sx={{ color: '#FFD700' }}>
+                        <MenuItem value="solar">Solar Energy</MenuItem>
+                        <MenuItem value="insurance">Insurance</MenuItem>
+                        <MenuItem value="real_estate">Real Estate</MenuItem>
+                        <MenuItem value="saas">Software/SaaS</MenuItem>
+                        <MenuItem value="healthcare">Healthcare</MenuItem>
+                        <MenuItem value="finance">Finance</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Card sx={{ background: '#111', border: '1px solid #333', mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
+                      🎭 Brand Personality
+                    </Typography>
+                    
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                      <InputLabel sx={{ color: '#FFD700' }}>Tone</InputLabel>
+                      <Select sx={{ color: '#FFD700' }}>
+                        <MenuItem value="professional">Professional</MenuItem>
+                        <MenuItem value="friendly">Friendly</MenuItem>
+                        <MenuItem value="authoritative">Authoritative</MenuItem>
+                        <MenuItem value="casual">Casual</MenuItem>
+                      </Select>
+                    </FormControl>
+                    
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                      <InputLabel sx={{ color: '#FFD700' }}>Pace</InputLabel>
+                      <Select sx={{ color: '#FFD700' }}>
+                        <MenuItem value="fast">Fast</MenuItem>
+                        <MenuItem value="medium">Medium</MenuItem>
+                        <MenuItem value="slow">Slow</MenuItem>
+                      </Select>
+                    </FormControl>
+                    
+                    <FormControl fullWidth>
+                      <InputLabel sx={{ color: '#FFD700' }}>Energy Level</InputLabel>
+                      <Select sx={{ color: '#FFD700' }}>
+                        <MenuItem value="high">High Energy</MenuItem>
+                        <MenuItem value="medium">Medium Energy</MenuItem>
+                        <MenuItem value="low">Low Energy</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Card sx={{ background: '#111', border: '1px solid #333', mb: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ color: '#00C851', mb: 2 }}>
+                      📜 Sales Script
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={6}
+                      placeholder="Paste your sales script here... The AI will analyze it and generate optimized conversation flows."
+                      sx={{ 
+                        mb: 2,
+                        '& .MuiInputBase-root': { color: '#FFD700' },
+                        '& .MuiInputLabel-root': { color: '#FFD700' }
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Preview />}
+                    sx={{
+                      borderColor: '#FFD700',
+                      color: '#FFD700',
+                      '&:hover': { borderColor: '#FFA000', color: '#FFA000' }
+                    }}
+                  >
+                    Preview Campaign
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<AutoAwesome />}
+                    sx={{
+                      background: 'linear-gradient(45deg, #FFD700, #FFA000)',
+                      color: '#000',
+                      '&:hover': { background: 'linear-gradient(45deg, #FFA000, #FFD700)' }
+                    }}
+                  >
+                    Generate AI Campaign
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} md={4}>
+        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #00C851', mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ color: '#00C851', fontFamily: 'Playfair Display', mb: 2 }}>
+              🚀 What AI Will Generate
+            </Typography>
+            
+            <List>
+              <ListItem>
+                <ListItemIcon>
+                  <VoiceChat sx={{ color: '#00C851' }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Conversation Prompts"
+                  secondary="AI-optimized prompts for each stage"
+                  sx={{ color: '#FFD700' }}
+                />
+              </ListItem>
+              <ListItem>
+                <ListItemIcon>
+                  <RecordVoiceOver sx={{ color: '#00C851' }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Voice Settings"
+                  secondary="Optimized speed, pitch, and tone"
+                  sx={{ color: '#FFD700' }}
+                />
+              </ListItem>
+              <ListItem>
+                <ListItemIcon>
+                  <Psychology sx={{ color: '#00C851' }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Objection Handlers"
+                  secondary="Smart responses to common objections"
+                  sx={{ color: '#FFD700' }}
+                />
+              </ListItem>
+              <ListItem>
+                <ListItemIcon>
+                  <Assessment sx={{ color: '#00C851' }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Qualification Logic"
+                  secondary="AI-driven lead qualification criteria"
+                  sx={{ color: '#FFD700' }}
+                />
+              </ListItem>
+            </List>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', border: '1px solid #FFD700' }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ color: '#FFD700', fontFamily: 'Playfair Display', mb: 2 }}>
+              ⚡ Quick Templates
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Business />}
+                sx={{ 
+                  borderColor: '#FFD700', 
+                  color: '#FFD700',
+                  justifyContent: 'flex-start'
+                }}
+              >
+                Solar Energy Template
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Security />}
+                sx={{ 
+                  borderColor: '#FFD700', 
+                  color: '#FFD700',
+                  justifyContent: 'flex-start'
+                }}
+              >
+                Insurance Template
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Assessment />}
+                sx={{ 
+                  borderColor: '#FFD700', 
+                  color: '#FFD700',
+                  justifyContent: 'flex-start'
+                }}
+              >
+                Real Estate Template
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
+  );
+
   const renderTrainingActions = () => (
     <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
       <Button
@@ -812,7 +1070,8 @@ Key Instructions:
     renderConversationBuilder(),
     renderPromptEngineering(),
     renderVoiceTraining(),
-    renderABTesting()
+    renderABTesting(),
+    renderGuidedTraining()
   ];
 
   return (
@@ -871,6 +1130,7 @@ Key Instructions:
           <Tab icon={<Psychology />} label="Prompt Engineering" />
           <Tab icon={<RecordVoiceOver />} label="Voice Training" />
           <Tab icon={<Science />} label="A/B Testing" />
+          <Tab icon={<AutoAwesome />} label="Guided Training" />
         </Tabs>
         
         <CardContent>

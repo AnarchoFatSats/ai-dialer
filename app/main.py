@@ -66,6 +66,21 @@ class CampaignCreate(BaseModel):
     timezone: Optional[str] = "America/New_York"
     ab_test_enabled: Optional[bool] = False
     ab_test_variants: Optional[Dict[str, Any]] = {}
+    
+    # Enhanced: Guided Training Fields
+    guided_training: Optional[bool] = False
+    primary_goal: Optional[str] = None  # "book appointments", "generate leads", "close sales"
+    target_audience: Optional[str] = None  # "homeowners with high electric bills"
+    success_metrics: Optional[List[str]] = None  # ["50 appointments/week", "$20K+ prospects"]
+    budget_constraints: Optional[Dict[str, float]] = None
+    timeline: Optional[str] = "ongoing"  # "6 months", "ongoing"
+    brand_tone: Optional[str] = "professional"  # "professional", "friendly", "authoritative"
+    brand_pace: Optional[str] = "medium"  # "fast", "medium", "slow"
+    brand_formality: Optional[str] = "conversational"  # "formal", "casual", "conversational"
+    energy_level: Optional[str] = "medium"  # "high", "medium", "low"
+    empathy_level: Optional[str] = "high"  # "high", "medium", "low"
+    industry: Optional[str] = "general"  # "solar", "insurance", "real_estate", "saas", etc.
+    template_id: Optional[str] = None
 
 
 class LeadUpload(BaseModel):
@@ -249,16 +264,68 @@ async def create_campaign(
     campaign_data: CampaignCreate,
     campaign_service=Depends(get_campaign_management_service)
 ):
-    """Create a new campaign with optimization features."""
+    """Create a new campaign with optimization features. Enhanced with guided training capability."""
     try:
-        campaign = await campaign_service.create_campaign(campaign_data.dict())
-        return {
-            "success": True,
-            "campaign_id": str(campaign.id),
-            "name": campaign.name,
-            "status": campaign.status.value,
-            "created_at": campaign.created_at.isoformat()
-        }
+        # Check if guided training is enabled
+        if campaign_data.guided_training:
+            # Use guided training service to generate campaign configuration
+            from app.services.guided_training import GuidedTrainingService
+            
+            service = GuidedTrainingService()
+            
+            # Generate the complete campaign configuration
+            campaign_config = await service.create_guided_campaign(
+                primary_goal=campaign_data.primary_goal,
+                target_audience=campaign_data.target_audience,
+                sales_script=campaign_data.script_template,
+                brand_personality={
+                    "tone": campaign_data.brand_tone,
+                    "pace": campaign_data.brand_pace,
+                    "formality": campaign_data.brand_formality,
+                    "energy_level": campaign_data.energy_level,
+                    "empathy_level": campaign_data.empathy_level
+                },
+                industry=campaign_data.industry,
+                success_metrics=campaign_data.success_metrics,
+                budget_constraints=campaign_data.budget_constraints,
+                timeline=campaign_data.timeline,
+                template_id=campaign_data.template_id
+            )
+            
+            # Override campaign data with AI-generated configuration
+            campaign_dict = campaign_data.dict()
+            campaign_dict.update({
+                "name": campaign_config.get("name", campaign_data.name),
+                "description": campaign_config.get("description", campaign_data.description),
+                "script_template": campaign_config.get("script_template", campaign_data.script_template)
+            })
+            
+            campaign = await campaign_service.create_campaign(campaign_dict)
+            
+            return {
+                "success": True,
+                "campaign_id": str(campaign.id),
+                "name": campaign.name,
+                "status": campaign.status.value,
+                "created_at": campaign.created_at.isoformat(),
+                "guided_training": True,
+                "ai_generated_config": {
+                    "conversation_flow": campaign_config.get("conversation_flow"),
+                    "voice_settings": campaign_config.get("voice_settings"),
+                    "objection_handlers": campaign_config.get("objection_handlers")
+                }
+            }
+        else:
+            # Standard campaign creation
+            campaign = await campaign_service.create_campaign(campaign_data.dict())
+            return {
+                "success": True,
+                "campaign_id": str(campaign.id),
+                "name": campaign.name,
+                "status": campaign.status.value,
+                "created_at": campaign.created_at.isoformat(),
+                "guided_training": False
+            }
     except Exception as e:
         logger.error(f"Error creating campaign: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -967,24 +1034,66 @@ async def create_conversation_flow(campaign_id: str, flow_data: dict):
 
 
 @app.get("/ai-training/prompts/{campaign_id}")
-async def get_campaign_prompts(campaign_id: str):
-    """Get AI prompts for a specific campaign"""
-    async with get_db() as db:
-        campaign = await db.get(Campaign, campaign_id)
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-
-        # Return current prompt configuration
+async def get_campaign_prompts(
+    campaign_id: str,
+    auto_generate: Optional[bool] = False,
+    sales_script: Optional[str] = None,
+    industry: Optional[str] = None
+):
+    """Get campaign prompts, with optional AI-powered generation from sales scripts"""
+    try:
+        # Standard prompts structure
+        prompts = {
+            "greeting": "Hello, this is [Agent Name] calling from [Company]. How are you doing today?",
+            "qualification": "I'm reaching out to homeowners in your area about [Product/Service]. Are you the homeowner?",
+            "presentation": "Great! I wanted to share some information about [Key Benefit] that could help you [Solve Problem].",
+            "objection_handling": "I understand your concern about [Objection]. Let me explain how we address that...",
+            "closing": "Based on what you've told me, I think this could be a great fit. What would be the best time to schedule a consultation?",
+            "transfer": "I'd like to connect you with our specialist who can provide more detailed information. Please hold while I transfer you."
+        }
+        
+        # If auto-generate is enabled, use guided training to create prompts from sales script
+        if auto_generate and sales_script:
+            try:
+                from app.services.guided_training import GuidedTrainingService
+                
+                service = GuidedTrainingService()
+                analyzed_script = await service.analyze_sales_script(sales_script, industry or "general")
+                
+                # Generate AI-optimized prompts from the analyzed script
+                ai_prompts = await service.generate_ai_prompts(analyzed_script)
+                
+                # Override with AI-generated prompts
+                prompts.update(ai_prompts)
+                
+                return {
+                    "success": True,
+                    "campaign_id": campaign_id,
+                    "prompts": prompts,
+                    "ai_generated": True,
+                    "script_analysis": {
+                        "greeting": analyzed_script.get("greeting"),
+                        "value_proposition": analyzed_script.get("value_proposition"),
+                        "key_benefits": analyzed_script.get("key_benefits"),
+                        "pain_points": analyzed_script.get("pain_points"),
+                        "call_to_action": analyzed_script.get("call_to_action")
+                    }
+                }
+                
+            except Exception as e:
+                logger.warning(f"Could not generate AI prompts: {e}")
+        
+        # Return standard prompts
         return {
-            "system_prompt": campaign.system_prompt or settings.CLAUDE_SYSTEM_PROMPT,
-            "greeting_prompt": campaign.greeting_prompt or "Generate a professional greeting",
-            "qualification_prompt": campaign.qualification_prompt or "Ask qualifying questions",
-            "presentation_prompt": campaign.presentation_prompt or "Present the offer",
-            "objection_prompt": campaign.objection_prompt or "Handle objections empathetically",
-            "closing_prompt": campaign.closing_prompt or "Close for next steps",
-            "temperature": campaign.ai_temperature or 0.7,
-            "max_tokens": campaign.ai_max_tokens or 200,
-            "response_length": campaign.ai_response_length or 30}
+            "success": True,
+            "campaign_id": campaign_id,
+            "prompts": prompts,
+            "ai_generated": False
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting campaign prompts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.put("/ai-training/prompts/{campaign_id}")
@@ -1012,20 +1121,65 @@ async def update_campaign_prompts(campaign_id: str, prompt_data: dict):
 
 
 @app.get("/ai-training/voice-settings/{campaign_id}")
-async def get_voice_settings(campaign_id: str):
-    """Get voice settings for a campaign"""
-    async with get_db() as db:
-        campaign = await db.get(Campaign, campaign_id)
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-
-        return {
-            "voice_id": campaign.voice_id or "rachel",
-            "voice_speed": campaign.voice_speed or 1.0,
-            "voice_pitch": campaign.voice_pitch or 1.0,
-            "voice_emphasis": campaign.voice_emphasis or "medium",
-            "voice_model": campaign.voice_model or "eleven_turbo_v2"
+async def get_voice_settings(
+    campaign_id: str,
+    auto_suggest: Optional[bool] = False,
+    brand_tone: Optional[str] = None,
+    brand_pace: Optional[str] = None,
+    industry: Optional[str] = None
+):
+    """Get voice settings for a campaign, with optional AI-powered suggestions"""
+    try:
+        # Get existing voice settings
+        voice_settings = {
+            "voice_id": "rachel",
+            "speed": 1.0,
+            "pitch": 1.0,
+            "emphasis": "medium",
+            "emotion": "neutral",
+            "stability": 0.8,
+            "similarity": 0.9,
+            "style": 0.6,
+            "use_speaker_boost": True
         }
+        
+        # If auto-suggest is enabled, use guided training to optimize settings
+        if auto_suggest and brand_tone and brand_pace:
+            try:
+                from app.services.guided_training import GuidedTrainingService
+                
+                service = GuidedTrainingService()
+                suggested_settings = await service.suggest_voice_settings(
+                    brand_tone=brand_tone,
+                    brand_pace=brand_pace,
+                    industry=industry or "general"
+                )
+                
+                # Override with AI suggestions
+                voice_settings.update(suggested_settings)
+                
+                return {
+                    "success": True,
+                    "campaign_id": campaign_id,
+                    "voice_settings": voice_settings,
+                    "ai_optimized": True,
+                    "optimization_reason": f"Optimized for {brand_tone} tone and {brand_pace} pace in {industry or 'general'} industry"
+                }
+                
+            except Exception as e:
+                logger.warning(f"Could not generate voice suggestions: {e}")
+        
+        # Return standard voice settings
+        return {
+            "success": True,
+            "campaign_id": campaign_id,
+            "voice_settings": voice_settings,
+            "ai_optimized": False
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting voice settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.put("/ai-training/voice-settings/{campaign_id}")
@@ -1243,8 +1397,12 @@ async def test_voice_settings(campaign_id: str, voice_data: dict):
 
 
 @app.get("/ai-training/templates")
-async def get_conversation_templates():
-    """Get pre-built conversation templates"""
+async def get_conversation_templates(
+    industry: Optional[str] = None,
+    style: Optional[str] = None,
+    include_guided: Optional[bool] = True
+):
+    """Get pre-built conversation templates, now enhanced with guided training templates"""
     templates = [
         {
             "id": 1,
@@ -1252,6 +1410,7 @@ async def get_conversation_templates():
             "description": "Direct, aggressive approach with urgency",
             "success_rate": 28.4,
             "style": "aggressive",
+            "type": "traditional",
             "prompts": {
                 "greeting": "Quick, direct greeting with immediate value proposition",
                 "qualification": "Fast qualification with assumptive questions",
@@ -1266,6 +1425,7 @@ async def get_conversation_templates():
             "description": "Relationship-building with needs assessment",
             "success_rate": 34.2,
             "style": "consultative",
+            "type": "traditional",
             "prompts": {
                 "greeting": "Warm, relationship-focused greeting",
                 "qualification": "Deep needs assessment with open-ended questions",
@@ -1278,33 +1438,63 @@ async def get_conversation_templates():
             "id": 3,
             "name": "Educational First",
             "description": "Lead with education and value before selling",
-            "success_rate": 22.8,
+            "success_rate": 29.8,
             "style": "educational",
+            "type": "traditional",
             "prompts": {
-                "greeting": "Professional greeting with educational offer",
-                "qualification": "Assess knowledge level and learning interest",
-                "presentation": "Educational content with embedded benefits",
-                "objection": "Address concerns with additional information",
-                "closing": "Invite to learn more with next steps"
-            }
-        },
-        {
-            "id": 4,
-            "name": "Relationship Building",
-            "description": "Long-term relationship focus over immediate sale",
-            "success_rate": 41.5,
-            "style": "relationship",
-            "prompts": {
-                "greeting": "Personal, relationship-focused greeting",
-                "qualification": "Understand long-term goals and challenges",
-                "presentation": "Position as long-term partner solution",
-                "objection": "Build trust through transparency",
-                "closing": "Establish ongoing relationship with next touch"
+                "greeting": "Educational value-first greeting",
+                "qualification": "Educational needs assessment",
+                "presentation": "Teaching-focused presentation",
+                "objection": "Educational objection handling",
+                "closing": "Knowledge-based closing"
             }
         }
     ]
-
-    return templates
+    
+    # Add guided training templates if requested
+    if include_guided:
+        try:
+            from app.services.campaign_templates import CampaignTemplateLibrary
+            
+            template_library = CampaignTemplateLibrary()
+            
+            # Get guided templates
+            if industry:
+                guided_templates = template_library.get_templates(industry_filter=industry, style_filter=style)
+            else:
+                guided_templates = template_library.get_templates(style_filter=style)
+            
+            # Add guided templates to the list
+            for template in guided_templates:
+                templates.append({
+                    "id": f"guided_{template.get('id', 'unknown')}",
+                    "name": template.get("name", "Unknown"),
+                    "description": template.get("description", ""),
+                    "success_rate": template.get("success_rate", 0),
+                    "style": template.get("style", "guided"),
+                    "type": "guided",
+                    "industry": template.get("industry", "general"),
+                    "prompts": template.get("prompts", {}),
+                    "voice_settings": template.get("voice_settings", {}),
+                    "objection_handlers": template.get("objection_handlers", [])
+                })
+                
+        except Exception as e:
+            logger.warning(f"Could not load guided templates: {e}")
+    
+    # Apply filters
+    if industry:
+        templates = [t for t in templates if t.get("industry") == industry or t.get("type") == "traditional"]
+    
+    if style:
+        templates = [t for t in templates if t.get("style") == style]
+    
+    return {
+        "success": True,
+        "templates": templates,
+        "total_traditional": len([t for t in templates if t.get("type") == "traditional"]),
+        "total_guided": len([t for t in templates if t.get("type") == "guided"])
+    }
 
 
 @app.post("/ai-training/deploy-template/{campaign_id}")

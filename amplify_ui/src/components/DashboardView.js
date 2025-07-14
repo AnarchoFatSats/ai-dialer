@@ -72,7 +72,7 @@ const performanceData = [
   { name: 'No Answer', value: 10, color: '#757575' }
 ];
 
-function DashboardView({ stats }) {
+function DashboardView({ stats, loading, backendConnected }) {
   const [campaignStatus, setCampaignStatus] = useState('running');
   const [concurrentCalls, setConcurrentCalls] = useState(25);
   const [aggressionLevel, setAggressionLevel] = useState(3);
@@ -254,6 +254,27 @@ function DashboardView({ stats }) {
 
   return (
     <Box>
+      {/* Header with Status */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4" sx={{ color: 'primary.main', fontWeight: 700 }}>
+          Elite Revenue Command Center
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Chip 
+            label={backendConnected ? "LIVE" : "DEMO MODE"} 
+            color={backendConnected ? "success" : "warning"} 
+            size="small" 
+            sx={{ fontWeight: 600 }}
+          />
+          <Chip 
+            label={loading ? "LOADING..." : "OPTIMIZED"} 
+            color={loading ? "info" : "warning"} 
+            size="small" 
+            sx={{ fontWeight: 600 }}
+          />
+        </Box>
+      </Box>
+
       {/* Control Panel */}
       <ControlPanel />
 

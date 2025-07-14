@@ -53,6 +53,7 @@ import AnalyticsView from './components/AnalyticsView';
 import CostMonitoringView from './components/CostMonitoringView';
 import RealTimeCallMonitor from './components/RealTimeCallMonitor';
 import AITrainingView from './components/AITrainingView';
+import apiService from './services/api';
 import './App.css';
 
 // Luxury Theme - Money, Power, Opportunity
@@ -239,34 +240,89 @@ function App() {
     transferRate: 0,
     aiEfficiency: 0
   });
+  const [loading, setLoading] = useState(true);
+  const [backendConnected, setBackendConnected] = useState(false);
 
-  useEffect(() => {
-    // Simulate real-time data updates
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        ...prev,
+  // Load dashboard data from backend
+  const loadDashboardData = async () => {
+    try {
+      // First check if backend is healthy
+      const healthCheck = await apiService.healthCheck();
+      console.log('Backend health check:', healthCheck);
+      setBackendConnected(true);
+      
+      // Load real dashboard data
+      const dashboardData = await apiService.getDashboardData();
+      console.log('Dashboard data loaded:', dashboardData);
+      
+      // Update stats with real data
+      if (dashboardData) {
+        setStats({
+          activeCalls: dashboardData.active_calls || 0,
+          todayTransfers: dashboardData.today_transfers || 0,
+          todayRevenue: dashboardData.today_revenue || 0,
+          costPerTransfer: dashboardData.cost_per_transfer || 0,
+          transferRate: dashboardData.transfer_rate || 0,
+          aiEfficiency: dashboardData.ai_efficiency || 0
+        });
+      }
+      
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+      setBackendConnected(false);
+      
+      // Show error toast
+      toast.error('Failed to connect to backend. Using demo data.');
+      
+      // Fall back to mock data for demo purposes
+      setStats({
         activeCalls: Math.floor(Math.random() * 50) + 10,
         todayTransfers: Math.floor(Math.random() * 200) + 150,
         todayRevenue: Math.floor(Math.random() * 10000) + 25000,
         costPerTransfer: (Math.random() * 0.1 + 0.08).toFixed(3),
         transferRate: (Math.random() * 10 + 15).toFixed(1),
         aiEfficiency: (Math.random() * 20 + 80).toFixed(1)
-      }));
-    }, 3000);
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Load initial data
+    loadDashboardData();
+    
+    // Set up real-time data updates
+    const interval = setInterval(() => {
+      if (backendConnected) {
+        loadDashboardData();
+      } else {
+        // Update with mock data if backend not available
+        setStats(prev => ({
+          ...prev,
+          activeCalls: Math.floor(Math.random() * 50) + 10,
+          todayTransfers: Math.floor(Math.random() * 200) + 150,
+          todayRevenue: Math.floor(Math.random() * 10000) + 25000,
+          costPerTransfer: (Math.random() * 0.1 + 0.08).toFixed(3),
+          transferRate: (Math.random() * 10 + 15).toFixed(1),
+          aiEfficiency: (Math.random() * 20 + 80).toFixed(1)
+        }));
+      }
+    }, 5000); // Check every 5 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [backendConnected]);
 
   const renderCurrentView = () => {
     switch (currentView) {
       case 'dashboard':
-        return <DashboardView stats={stats} />;
+        return <DashboardView stats={stats} loading={loading} backendConnected={backendConnected} />;
       case 'control':
-        return <CallControlPanel />;
+        return <CallControlPanel apiService={apiService} />;
       case 'analytics':
-        return <AnalyticsView />;
+        return <AnalyticsView apiService={apiService} />;
       case 'training':
-        return <AITrainingView />;
+        return <AITrainingView apiService={apiService} />;
       case 'costs':
         return <CostMonitoringView />;
       case 'calls':
