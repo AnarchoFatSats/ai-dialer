@@ -170,8 +170,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Initialize templates
-templates = Jinja2Templates(directory="app/templates")
+# Initialize templates (lazy loading to avoid import issues)
+templates = None
+try:
+    templates = Jinja2Templates(directory="app/templates")
+except Exception as e:
+    print(f"Warning: Could not initialize templates: {e}")
+    templates = None
 
 # Add CORS middleware
 app.add_middleware(
@@ -225,6 +230,8 @@ async def health_check():
 @app.get("/admin", response_class=HTMLResponse, tags=["Admin"])
 async def admin_dashboard(request: Request):
     """Serve the admin dashboard interface."""
+    if templates is None:
+        return JSONResponse({"error": "Templates not available"}, status_code=503)
     return templates.TemplateResponse(
         "admin_dashboard.html", {
             "request": request})
