@@ -79,10 +79,20 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
       setMessages([{
         id: 1,
         role: 'assistant',
-        content: 'Hi! I\'m your AI campaign trainer. I\'ll help you create effective calling campaigns through simple conversation. What would you like to achieve?',
+        content: 'Hi! My name is Reach. I\'m here to walk you through building the perfect campaign so the AI can create amazing prompts for a great agent ready to go. Let\'s start by understanding what you want to achieve with your calling campaign. What type of business are you calling for?',
         timestamp: new Date().toISOString(),
         type: 'welcome'
       }]);
+      
+      // Set suggested responses for the initial question
+      setSuggestedResponses([
+        'Lead Generation',
+        'Sales Outreach',
+        'Customer Support',
+        'Market Research',
+        'Appointment Setting',
+        'Follow-up Calls'
+      ]);
     } finally {
       setIsLoading(false);
     }

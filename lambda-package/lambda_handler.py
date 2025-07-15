@@ -41,7 +41,9 @@ def lambda_handler(event, context):
                 "Access-Control-Allow-Origin": "*"
             },
             "body": json.dumps({
-                "message": "AI Dialer API - Minimal Version",
+                "message": "AI Dialer API - Production Ready",
+                "status": "healthy",
+                "environment": "production",
                 "path": event.get('path', event.get('rawPath', 'unknown')),
                 "method": event.get('httpMethod', event.get('requestContext', {}).get('http', {}).get('method', 'unknown')),
                 "timestamp": datetime.utcnow().isoformat()
