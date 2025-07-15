@@ -1,11 +1,11 @@
 // Environment configuration for the frontend
 const config = {
-  // Backend API URL - change this to your deployed backend URL
+  // Backend API URL - Updated to use production backend
   // For development with local backend, use: 'http://localhost:8000'
-  // For production with deployed backend, use: 'https://your-backend-domain.com'
+  // For production with deployed backend, use: production API URL
   API_BASE_URL: process.env.REACT_APP_BACKEND_API_URL || 
     (process.env.NODE_ENV === 'production' 
-      ? 'https://your-backend-domain.com' // Replace with your actual backend domain
+      ? 'https://751fnxwec1.execute-api.us-east-1.amazonaws.com/prod' // Production backend URL
       : 'http://localhost:8000'),
   
   // AWS Configuration
