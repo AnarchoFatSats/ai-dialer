@@ -43,12 +43,13 @@ const AITrainingView = ({ apiService: propApiService }) => {
       setLearningStats(data);
     } catch (error) {
       console.error('Error loading learning stats:', error);
-      // Set default values if API call fails
+      // NO MORE DEFAULT VALUES - Show error state
       setLearningStats({
         progress: 0,
         successRate: 0,
         totalCalls: 0,
-        conversions: 0
+        conversions: 0,
+        error: true
       });
     }
   };

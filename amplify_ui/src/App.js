@@ -271,20 +271,20 @@ function App() {
       }
       
     } catch (error) {
-      console.error('Failed to load dashboard data:', error);
+      console.error('Backend connection failed:', error);
       setBackendConnected(false);
       
-      // Show error toast
-      toast.error('Failed to connect to backend. Using demo data.');
+      // Show error toast - NO MORE DEMO DATA
+      toast.error('Backend connection failed. Please check API status.');
       
-      // Fall back to mock data for demo purposes
+      // Keep stats at zero if backend fails
       setStats({
-        activeCalls: Math.floor(Math.random() * 50) + 10,
-        todayTransfers: Math.floor(Math.random() * 200) + 150,
-        todayRevenue: Math.floor(Math.random() * 10000) + 25000,
-        costPerTransfer: (Math.random() * 0.1 + 0.08).toFixed(3),
-        transferRate: (Math.random() * 10 + 15).toFixed(1),
-        aiEfficiency: (Math.random() * 20 + 80).toFixed(1)
+        activeCalls: 0,
+        todayTransfers: 0,
+        todayRevenue: 0,
+        costPerTransfer: 0,
+        transferRate: 0,
+        aiEfficiency: 0
       });
     } finally {
       setLoading(false);
@@ -296,21 +296,10 @@ function App() {
     loadDashboardData();
     loadCampaigns();
     
-    // Set up real-time data updates
+    // Set up real-time data updates - ONLY IF BACKEND IS CONNECTED
     const interval = setInterval(() => {
       if (backendConnected) {
         loadDashboardData();
-      } else {
-        // Update with mock data if backend not available
-        setStats(prev => ({
-          ...prev,
-          activeCalls: Math.floor(Math.random() * 50) + 10,
-          todayTransfers: Math.floor(Math.random() * 200) + 150,
-          todayRevenue: Math.floor(Math.random() * 10000) + 25000,
-          costPerTransfer: (Math.random() * 0.1 + 0.08).toFixed(3),
-          transferRate: (Math.random() * 10 + 15).toFixed(1),
-          aiEfficiency: (Math.random() * 20 + 80).toFixed(1)
-        }));
       }
     }, 5000); // Check every 5 seconds
 
@@ -324,12 +313,9 @@ function App() {
       setCampaigns(campaignsData || []);
     } catch (error) {
       console.error('Failed to load campaigns:', error);
-      // Set mock campaigns for demo
-      setCampaigns([
-        { id: 'solar_q1', name: 'Solar Leads Q1', status: 'active' },
-        { id: 'hvac_campaign', name: 'HVAC Campaign', status: 'paused' },
-        { id: 'insurance_leads', name: 'Insurance Leads', status: 'active' }
-      ]);
+      // NO MORE MOCK CAMPAIGNS - Leave empty
+      setCampaigns([]);
+      toast.error('Failed to load campaigns from backend');
     }
   };
 

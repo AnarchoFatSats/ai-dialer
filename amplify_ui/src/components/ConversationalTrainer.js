@@ -79,20 +79,13 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
       setMessages([{
         id: 1,
         role: 'assistant',
-        content: 'Hi! My name is Reach. I\'m here to walk you through building the perfect campaign so the AI can create amazing prompts for a great agent ready to go. Let\'s start by understanding what you want to achieve with your calling campaign. What type of business are you calling for?',
+        content: 'Connection to AI trainer failed. Please check backend connectivity and try again.',
         timestamp: new Date().toISOString(),
-        type: 'welcome'
+        type: 'error'
       }]);
       
-      // Set suggested responses for the initial question
-      setSuggestedResponses([
-        'Lead Generation',
-        'Sales Outreach',
-        'Customer Support',
-        'Market Research',
-        'Appointment Setting',
-        'Follow-up Calls'
-      ]);
+      // NO MORE SUGGESTED RESPONSES IN ERROR STATE
+      setSuggestedResponses([]);
     } finally {
       setIsLoading(false);
     }

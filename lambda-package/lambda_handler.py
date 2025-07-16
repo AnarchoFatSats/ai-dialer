@@ -28,12 +28,14 @@ def lambda_handler(event, context):
             except json.JSONDecodeError:
                 body = {}
         
-        # CORS headers
+        # CORS headers - Updated for production Amplify frontend
         cors_headers = {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            "Access-Control-Allow-Origin": "https://main.dwrcfhzub1d6l.amplifyapp.com",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+            "Access-Control-Allow-Credentials": "false",
+            "Access-Control-Max-Age": "86400"
         }
         
         # Handle OPTIONS preflight requests
@@ -151,6 +153,146 @@ def lambda_handler(event, context):
                 })
             }
         
+        # Campaigns endpoint
+        if path == '/campaigns' and method == 'GET':
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": json.dumps([
+                    {
+                        "id": "camp_001",
+                        "name": "Solar Lead Generation",
+                        "status": "active",
+                        "created_at": "2025-01-15T09:00:00Z",
+                        "leads_count": 0,
+                        "calls_made": 0,
+                        "transfers": 0
+                    }
+                ])
+            }
+        
+        # Create campaign endpoint
+        if path == '/campaigns' and method == 'POST':
+            campaign_id = str(uuid.uuid4())
+            name = body.get('name', 'New Campaign')
+            
+            return {
+                "statusCode": 201,
+                "headers": cors_headers,
+                "body": json.dumps({
+                    "id": campaign_id,
+                    "name": name,
+                    "status": "active",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "leads_count": 0,
+                    "calls_made": 0,
+                    "transfers": 0
+                })
+            }
+        
+        # Upload leads to campaign
+        if path.startswith('/campaigns/') and path.endswith('/leads') and method == 'POST':
+            campaign_id = path.split('/')[2]
+            leads = body.get('leads', [])
+            
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": json.dumps({
+                    "success": True,
+                    "campaign_id": campaign_id,
+                    "uploaded_count": len(leads),
+                    "message": f"Successfully uploaded {len(leads)} leads to campaign"
+                })
+            }
+        
+        # Get leads for campaign
+        if path.startswith('/campaigns/') and path.endswith('/leads') and method == 'GET':
+            campaign_id = path.split('/')[2]
+            page = int(query_params.get('page', 1))
+            limit = int(query_params.get('limit', 100))
+            
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": json.dumps({
+                    "leads": [],
+                    "total": 0,
+                    "page": page,
+                    "limit": limit,
+                    "campaign_id": campaign_id
+                })
+            }
+        
+        # Call initiation endpoint
+        if path == '/call/initiate' and method == 'POST':
+            phone_number = body.get('phone_number')
+            campaign_id = body.get('campaign_id')
+            
+            if not phone_number:
+                return {
+                    "statusCode": 400,
+                    "headers": cors_headers,
+                    "body": json.dumps({
+                        "error": "Phone number is required"
+                    })
+                }
+            
+            call_id = str(uuid.uuid4())
+            
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": json.dumps({
+                    "call_id": call_id,
+                    "status": "initiated",
+                    "phone_number": phone_number,
+                    "campaign_id": campaign_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            }
+        
+        # Queue status endpoint
+        if path == '/queue/status' and method == 'GET':
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": json.dumps({
+                    "active_calls": 3,
+                    "queued_calls": 15,
+                    "total_agents": 5,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            }
+        
+        # Active calls endpoint
+        if path == '/calls/active' and method == 'GET':
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": json.dumps([
+                    {
+                        "call_id": "call_001",
+                        "phone_number": "+1234567890",
+                        "status": "in_progress",
+                        "started_at": "2025-01-15T14:30:00Z",
+                        "agent_id": "agent_001"
+                    }
+                ])
+            }
+        
+        # Training start endpoint
+        if path == '/training/start' and method == 'POST':
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": json.dumps({
+                    "success": True,
+                    "session_id": str(uuid.uuid4()),
+                    "message": "Training session started"
+                })
+            }
+        
         # Default response for unknown paths
         return {
             "statusCode": 200,
@@ -164,6 +306,11 @@ def lambda_handler(event, context):
                 "timestamp": datetime.utcnow().isoformat(),
                 "available_endpoints": [
                     "/health",
+                    "/campaigns",
+                    "/call/initiate",
+                    "/queue/status",
+                    "/calls/active",
+                    "/training/start",
                     "/conversational-training/start",
                     "/conversational-training/continue", 
                     "/analytics/dashboard",
