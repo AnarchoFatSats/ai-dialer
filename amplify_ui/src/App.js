@@ -40,7 +40,7 @@ import {
   Security,
   VolumeUp,
   Star,
-  Diamond,
+  PanTool,
   MonetizationOn,
   Timeline,
   Psychology
@@ -53,6 +53,7 @@ import AnalyticsView from './components/AnalyticsView';
 import CostMonitoringView from './components/CostMonitoringView';
 import RealTimeCallMonitor from './components/RealTimeCallMonitor';
 import AITrainingView from './components/AITrainingView';
+import LeadUploadManager from './components/LeadUploadManager';
 import apiService from './services/api';
 import './App.css';
 
@@ -222,6 +223,7 @@ const luxuryTheme = createTheme({
 const sidebarItems = [
   { text: 'Dashboard', icon: <Dashboard />, view: 'dashboard' },
   { text: 'Call Control', icon: <Phone />, view: 'control' },
+  { text: 'Lead Upload', icon: <Groups />, view: 'leads' },
   { text: 'Analytics', icon: <Analytics />, view: 'analytics' },
   { text: 'AI Training', icon: <Psychology />, view: 'training' },
   { text: 'Cost Monitor', icon: <AttachMoney />, view: 'costs' },
@@ -242,6 +244,7 @@ function App() {
   });
   const [loading, setLoading] = useState(true);
   const [backendConnected, setBackendConnected] = useState(false);
+  const [campaigns, setCampaigns] = useState([]);
 
   // Load dashboard data from backend
   const loadDashboardData = async () => {
@@ -291,6 +294,7 @@ function App() {
   useEffect(() => {
     // Load initial data
     loadDashboardData();
+    loadCampaigns();
     
     // Set up real-time data updates
     const interval = setInterval(() => {
@@ -313,12 +317,30 @@ function App() {
     return () => clearInterval(interval);
   }, [backendConnected]);
 
+  // Load campaigns for lead upload
+  const loadCampaigns = async () => {
+    try {
+      const campaignsData = await apiService.getCampaigns();
+      setCampaigns(campaignsData || []);
+    } catch (error) {
+      console.error('Failed to load campaigns:', error);
+      // Set mock campaigns for demo
+      setCampaigns([
+        { id: 'solar_q1', name: 'Solar Leads Q1', status: 'active' },
+        { id: 'hvac_campaign', name: 'HVAC Campaign', status: 'paused' },
+        { id: 'insurance_leads', name: 'Insurance Leads', status: 'active' }
+      ]);
+    }
+  };
+
   const renderCurrentView = () => {
     switch (currentView) {
       case 'dashboard':
         return <DashboardView stats={stats} loading={loading} backendConnected={backendConnected} />;
       case 'control':
         return <CallControlPanel apiService={apiService} />;
+      case 'leads':
+        return <LeadUploadManager apiService={apiService} campaigns={campaigns} />;
       case 'analytics':
         return <AnalyticsView apiService={apiService} />;
       case 'training':
@@ -365,7 +387,7 @@ function App() {
                   height: 48
                 }}
               >
-                <Diamond />
+                <PanTool />
               </Avatar>
               <Box>
                 <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 700 }}>

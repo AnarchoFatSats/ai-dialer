@@ -279,10 +279,49 @@ class APIService {
   // Lead Management
   async uploadLeads(campaignId, leads) {
     try {
-      const response = await api.post(`/campaigns/${campaignId}/leads`, leads);
+      const response = await api.post(`/campaigns/${campaignId}/leads`, { leads });
       return response.data;
     } catch (error) {
       throw new Error(`Failed to upload leads: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  async uploadCSVLeads(campaignId, csvFile) {
+    try {
+      const formData = new FormData();
+      formData.append('file', csvFile);
+      formData.append('campaign_id', campaignId);
+      
+      const response = await api.post(`/campaigns/${campaignId}/leads/csv`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to upload CSV leads: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  async getLeads(campaignId, page = 1, limit = 100) {
+    try {
+      const response = await api.get(`/campaigns/${campaignId}/leads`, {
+        params: { page, limit }
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch leads: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  async deleteLeads(campaignId, leadIds) {
+    try {
+      const response = await api.delete(`/campaigns/${campaignId}/leads`, {
+        data: { lead_ids: leadIds }
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to delete leads: ${error.response?.data?.detail || error.message}`);
     }
   }
 
