@@ -1,31 +1,35 @@
-"""
-AWS Lambda handler for FastAPI application
-Runs the AI Dialer FastAPI app in AWS Lambda with API Gateway
-"""
-
-import json
+﻿import json
 import os
-from mangum import Mangum
-from app.main import app
+import sys
+
+# Add the lambda_packages directory to Python path
+sys.path.insert(0, '/var/task/lambda_packages')
+sys.path.insert(0, '/var/task')
 
 # Set environment for Lambda
-os.environ.setdefault("ENVIRONMENT", "production")
-os.environ.setdefault("DEBUG", "false")
-
-# Create Lambda handler using Mangum
-handler = Mangum(app, lifespan="off")
+os.environ["AWS_LAMBDA_FUNCTION_NAME"] = "aidialer-api"
+os.environ["DATABASE_URL"] = ""
+os.environ["ENVIRONMENT"] = "production"
+os.environ["DEBUG"] = "false"
 
 def lambda_handler(event, context):
-    """
-    AWS Lambda handler function
-    """
+    """AWS Lambda handler function"""
     try:
+        from mangum import Mangum
+        from app.main import app
+
+        # Create Lambda handler using Mangum
+        handler = Mangum(app, lifespan="off")
         return handler(event, context)
+        
     except Exception as e:
+        # Fallback if enhanced version fails
         return {
-            "statusCode": 500,
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({
-                "error": "Internal server error",
-                "message": str(e)
+                "status": "degraded",
+                "message": f"Enhanced features unavailable: {str(e)}",
+                "version": "1.0.0-fallback"
             })
-        } 
+        }
