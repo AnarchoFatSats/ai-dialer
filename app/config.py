@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings
 from typing import Optional
 
 
@@ -9,9 +9,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
     
-    # Database - AWS RDS PostgreSQL
-    database_url: str = "postgresql://postgres:password@localhost:5432/aidialer"
-    redis_url: str = "redis://localhost:6379"
+    # Database - AWS RDS PostgreSQL (optional for Lambda)
+    database_url: Optional[str] = "postgresql://postgres:password@localhost:5432/aidialer"
+    redis_url: Optional[str] = "redis://localhost:6379"
     
     # AWS SNS Configuration for notifications
     aws_sns_region: Optional[str] = "us-east-1"
