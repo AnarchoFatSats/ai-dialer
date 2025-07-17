@@ -14,21 +14,21 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(45deg, #FFD700, #FFA000);
+  background: linear-gradient(45deg, #D4AF37, #B8860B); /* Changed from bright gold to softer antique gold */
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(45deg, #FFA000, #FFD700);
+  background: linear-gradient(45deg, #B8860B, #D4AF37);
 }
 
 /* Custom animations */
 @keyframes goldGlow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.3); /* Updated to softer gold */
   }
   50% {
-    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+    box-shadow: 0 0 30px rgba(212, 175, 55, 0.5); /* Less intense glow */
   }
 }
 
@@ -98,7 +98,7 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(255, 215, 0, 0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.08) 0%, transparent 70%); /* Softer gold with less opacity */
   transform: scale(0);
   transition: transform 0.5s ease;
 }
@@ -109,8 +109,8 @@
 
 .premium-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(255, 215, 0, 0.2);
-  border-color: #FFD700;
+  box-shadow: 0 20px 40px rgba(212, 175, 55, 0.15); /* Less intense shadow */
+  border-color: #D4AF37; /* Softer gold border */
 }
 
 /* Money counter animation */
@@ -133,38 +133,38 @@
 
 /* Status indicators */
 .status-active {
-  color: #00C851;
-  text-shadow: 0 0 10px rgba(0, 200, 81, 0.5);
+  color: #4CAF50; /* Softer green */
+  text-shadow: 0 0 8px rgba(76, 175, 80, 0.3); /* Less intense glow */
 }
 
 .status-warning {
-  color: #FF8F00;
-  text-shadow: 0 0 10px rgba(255, 143, 0, 0.5);
+  color: #FF9800; /* Softer orange */
+  text-shadow: 0 0 8px rgba(255, 152, 0, 0.3); /* Less intense glow */
 }
 
 .status-error {
-  color: #FF1744;
-  text-shadow: 0 0 10px rgba(255, 23, 68, 0.5);
+  color: #F44336; /* Softer red */
+  text-shadow: 0 0 8px rgba(244, 67, 54, 0.3); /* Less intense glow */
 }
 
 /* Elite loading spinner */
 @keyframes eliteSpinner {
   0% {
     transform: rotate(0deg);
-    border-color: #FFD700 transparent transparent transparent;
+    border-color: #D4AF37 transparent transparent transparent; /* Softer gold */
   }
   25% {
-    border-color: #00C851 #FFD700 transparent transparent;
+    border-color: #4CAF50 #D4AF37 transparent transparent; /* Updated colors */
   }
   50% {
-    border-color: transparent #00C851 #FFD700 transparent;
+    border-color: transparent #4CAF50 #D4AF37 transparent;
   }
   75% {
-    border-color: transparent transparent #00C851 #FFD700;
+    border-color: transparent transparent #4CAF50 #D4AF37;
   }
   100% {
     transform: rotate(360deg);
-    border-color: #FFD700 transparent transparent transparent;
+    border-color: #D4AF37 transparent transparent transparent;
   }
 }
 

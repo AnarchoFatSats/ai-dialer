@@ -195,7 +195,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
           >
             <Avatar
               sx={{
-                bgcolor: isUser ? '#FFD700' : '#00C851',
+                bgcolor: isUser ? '#D4AF37' : '#4CAF50', // Updated to softer colors
                 color: isUser ? '#000' : '#fff',
                 width: 32,
                 height: 32
@@ -208,11 +208,11 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
               elevation={isUser ? 2 : 1}
               sx={{
                 p: 2,
-                bgcolor: isUser ? '#FFD700' : isSuccess ? '#00C851' : isError ? '#ff4444' : '#1A1A1A',
+                bgcolor: isUser ? '#D4AF37' : isSuccess ? '#4CAF50' : isError ? '#F44336' : '#1A1A1A', // Updated to softer colors
                 color: isUser ? '#000' : '#fff',
                 borderRadius: 2,
-                border: isWelcome ? '2px solid #FFD700' : 'none',
-                boxShadow: isWelcome ? '0 0 20px rgba(255, 215, 0, 0.3)' : 'none'
+                border: isWelcome ? '2px solid #D4AF37' : 'none', // Updated to softer gold
+                boxShadow: isWelcome ? '0 0 20px rgba(212, 175, 55, 0.3)' : 'none' // Updated to softer gold
               }}
             >
               <Typography
@@ -300,7 +300,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
             borderRadius: 2,
             backgroundColor: '#333',
             '& .MuiLinearProgress-bar': {
-              background: 'linear-gradient(90deg, #FFD700, #00C851)'
+              background: 'linear-gradient(90deg, #D4AF37, #4CAF50)' // Updated to softer colors
             }
           }}
         />
@@ -318,7 +318,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ color: '#FFD700', fontFamily: 'Playfair Display' }}>
+        <DialogTitle sx={{ color: '#D4AF37', fontFamily: 'Playfair Display' }}> {/* Updated to softer gold */}
           🎯 Campaign Preview
         </DialogTitle>
         <DialogContent>
@@ -327,14 +327,14 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
               {campaignConfig.name}
             </Typography>
             
-            <Typography variant="body1" sx={{ color: '#FFD700', mb: 3 }}>
+            <Typography variant="body1" sx={{ color: '#D4AF37', mb: 3 }}> {/* Updated to softer gold */}
               {campaignConfig.description}
             </Typography>
             
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 3 }}>
               <Card sx={{ bgcolor: '#1A1A1A', border: '1px solid #333' }}>
                 <CardContent>
-                  <Typography variant="subtitle1" sx={{ color: '#FFD700', mb: 1 }}>
+                  <Typography variant="subtitle1" sx={{ color: '#D4AF37', mb: 1 }}> {/* Updated to softer gold */}
                     📈 Expected Performance
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#fff' }}>
@@ -351,7 +351,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
               
               <Card sx={{ bgcolor: '#1A1A1A', border: '1px solid #333' }}>
                 <CardContent>
-                  <Typography variant="subtitle1" sx={{ color: '#FFD700', mb: 1 }}>
+                  <Typography variant="subtitle1" sx={{ color: '#D4AF37', mb: 1 }}> {/* Updated to softer gold */}
                     🤖 AI Configuration
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#fff' }}>
@@ -369,7 +369,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
             
             {learningInsights.length > 0 && (
               <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" sx={{ color: '#00C851', mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ color: '#4CAF50', mb: 2 }}> {/* Updated to softer green */}
                   🧠 Learning Insights Applied
                 </Typography>
                 {learningInsights.map((insight, index) => (
@@ -378,7 +378,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
                     severity="info"
                     sx={{
                       mb: 1,
-                      '& .MuiAlert-message': { color: '#FFD700' },
+                      '& .MuiAlert-message': { color: '#D4AF37' }, // Updated to softer gold
                       bgcolor: '#1A1A1A',
                       border: '1px solid #333'
                     }}
@@ -412,9 +412,9 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
               startIcon={<Assessment />}
               onClick={() => setShowCampaignPreview(true)}
               sx={{
-                borderColor: '#FFD700',
-                color: '#FFD700',
-                '&:hover': { borderColor: '#FFA000', color: '#FFA000' }
+                borderColor: '#D4AF37', // Updated to softer gold
+                color: '#D4AF37',
+                '&:hover': { borderColor: '#B8860B', color: '#B8860B' }
               }}
             >
               View Campaign
@@ -428,9 +428,9 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
               startIcon={<ShowChart />}
               onClick={() => window.open(`/analytics/${campaignId}`, '_blank')}
               sx={{
-                borderColor: '#00C851',
-                color: '#00C851',
-                '&:hover': { borderColor: '#00A142', color: '#00A142' }
+                borderColor: '#4CAF50', // Updated to softer green
+                color: '#4CAF50',
+                '&:hover': { borderColor: '#388E3C', color: '#388E3C' }
               }}
             >
               Analytics
@@ -445,7 +445,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
             sx={{
               borderColor: '#999',
               color: '#999',
-              '&:hover': { borderColor: '#FFD700', color: '#FFD700' }
+              '&:hover': { borderColor: '#D4AF37', color: '#D4AF37' }
             }}
           >
             New Campaign
@@ -460,14 +460,14 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
       {/* Header */}
       <Box sx={{ 
         bgcolor: '#0A0A0A', 
-        border: '1px solid #FFD700',
+        border: '1px solid #D4AF37', // Updated to softer gold
         borderRadius: '8px 8px 0 0'
       }}>
         <Box sx={{ p: 2, textAlign: 'center' }}>
           <Typography
             variant="h5"
             sx={{
-              color: '#FFD700',
+              color: '#D4AF37', // Updated to softer gold
               fontFamily: 'Playfair Display',
               fontWeight: 'bold',
               display: 'flex',
@@ -476,7 +476,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
               gap: 1
             }}
           >
-            <AutoAwesome sx={{ color: '#FFD700' }} />
+            <AutoAwesome sx={{ color: '#D4AF37' }} /> {/* Updated to softer gold */}
             Conversational AI Trainer
           </Typography>
           <Typography variant="body2" sx={{ color: '#999', mt: 1 }}>
@@ -500,7 +500,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
             background: '#1A1A1A'
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#FFD700',
+            background: '#D4AF37', // Updated to softer gold
             borderRadius: '4px'
           }
         }}
@@ -514,7 +514,7 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
             <CircularProgress
               size={24}
               sx={{
-                color: '#FFD700'
+                color: '#D4AF37' // Updated to softer gold
               }}
             />
           </Box>
@@ -545,19 +545,19 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
             disabled={isLoading}
             sx={{
               '& .MuiOutlinedInput-root': {
-                color: '#FFD700',
+                color: '#D4AF37', // Updated to softer gold
                 '& fieldset': {
-                  borderColor: '#FFD700'
+                  borderColor: '#D4AF37'
                 },
                 '&:hover fieldset': {
-                  borderColor: '#FFA000'
+                  borderColor: '#B8860B'
                 },
                 '&.Mui-focused fieldset': {
-                  borderColor: '#FFD700'
+                  borderColor: '#D4AF37'
                 }
               },
               '& .MuiInputBase-input': {
-                color: '#FFD700'
+                color: '#D4AF37' // Updated to softer gold
               },
               '& .MuiInputBase-input::placeholder': {
                 color: '#999'
@@ -568,10 +568,10 @@ const ConversationalTrainer = ({ apiService: propApiService }) => {
             onClick={() => sendMessage(inputValue)}
             disabled={!inputValue.trim() || isLoading}
             sx={{
-              bgcolor: '#FFD700',
+              bgcolor: '#D4AF37', // Updated to softer gold
               color: '#000',
               '&:hover': {
-                bgcolor: '#FFA000'
+                bgcolor: '#B8860B'
               },
               '&:disabled': {
                 bgcolor: '#333',

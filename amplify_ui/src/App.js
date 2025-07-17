@@ -41,9 +41,9 @@ import {
   VolumeUp,
   Star,
   PanTool,
-  MonetizationOn,
-  Timeline,
-  Psychology
+      MonetizationOn,
+    Timeline,
+    Psychology
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
@@ -62,92 +62,50 @@ const luxuryTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#FFD700', // Rich Gold
-      dark: '#B8860B', // Dark Goldenrod
-      light: '#FFFF66', // Light Gold
-      contrastText: '#000000'
+      main: '#D4AF37', // Changed from bright #FFD700 to softer antique gold
+      dark: '#B8860B',
+      light: '#F4E87C'
     },
     secondary: {
-      main: '#00C851', // Emerald Green
-      dark: '#007E33', // Dark Emerald
-      light: '#4CAF50', // Light Emerald
-      contrastText: '#FFFFFF'
+      main: '#FF6B35', // Softer orange-red
+      dark: '#E85A2B',
+      light: '#FF8C66'
     },
     background: {
-      default: '#0A0A0A', // Rich Black
-      paper: '#1A1A1A', // Charcoal
-    },
-    surface: {
-      main: '#2A2A2A', // Medium Gray
-      dark: '#1A1A1A', // Dark Gray
-      light: '#3A3A3A' // Light Gray
+      default: '#0A0A0A',
+      paper: '#1A1A1A'
     },
     text: {
-      primary: '#FFFFFF', // White
-      secondary: '#E0E0E0', // Light Gray
-      disabled: '#757575'
+      primary: '#E8E8E8', // Softer white
+      secondary: '#B8B8B8'
     },
     success: {
-      main: '#00C851', // Success Green
-      dark: '#007E33',
-      light: '#4CAF50'
+      main: '#4CAF50', // Less bright green
+      dark: '#388E3C'
     },
     warning: {
-      main: '#FF8F00', // Amber Warning
-      dark: '#E65100',
-      light: '#FFA726'
+      main: '#FF9800', // Softer orange
+      dark: '#F57C00'
     },
     error: {
-      main: '#FF1744', // Error Red
-      dark: '#C62828',
-      light: '#EF5350'
-    },
-    info: {
-      main: '#1E88E5', // Info Blue
-      dark: '#1565C0',
-      light: '#42A5F5'
+      main: '#F44336', // Less harsh red
+      dark: '#D32F2F'
     }
   },
   typography: {
-    fontFamily: '"Playfair Display", "Roboto", "Arial", sans-serif',
-    h1: {
-      fontWeight: 700,
-      fontSize: '3.5rem',
-      color: '#FFD700',
-      textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
-    },
-    h2: {
-      fontWeight: 600,
-      fontSize: '2.8rem',
-      color: '#FFD700'
-    },
-    h3: {
-      fontWeight: 600,
-      fontSize: '2.2rem',
-      color: '#FFFFFF'
-    },
+    fontFamily: '"Playfair Display", serif',
     h4: {
-      fontWeight: 500,
-      fontSize: '1.8rem',
-      color: '#E0E0E0'
+      fontWeight: 600,
+      color: '#D4AF37', // Updated to new softer gold
+      textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)'
     },
     h5: {
       fontWeight: 500,
-      fontSize: '1.4rem',
-      color: '#E0E0E0'
+      color: '#D4AF37' // Updated to new softer gold
     },
     h6: {
       fontWeight: 500,
-      fontSize: '1.2rem',
-      color: '#E0E0E0'
-    },
-    body1: {
-      fontSize: '1rem',
-      color: '#E0E0E0'
-    },
-    body2: {
-      fontSize: '0.875rem',
-      color: '#BDBDBD'
+      color: '#E8E8E8'
     }
   },
   components: {
@@ -555,8 +513,8 @@ function App() {
           toastOptions={{
             style: {
               background: '#1A1A1A',
-              color: '#FFD700',
-              border: '1px solid #FFD700'
+              color: '#D4AF37', // Updated to softer gold
+              border: '1px solid #D4AF37'
             }
           }}
         />

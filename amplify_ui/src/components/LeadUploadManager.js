@@ -58,71 +58,223 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
   });
   const fileInputRef = useRef(null);
 
-  // CSV parsing function
+  // Helper to find column index by header name
+  const findColumn = (headers, searchTerms) => {
+    for (let i = 0; i < headers.length; i++) {
+      if (searchTerms.some(term => headers[i].toLowerCase().includes(term))) {
+        return i;
+      }
+    }
+    return undefined;
+  };
+
+  // Enhanced CSV parsing with smart lead mapping
   const parseCSV = (csvText) => {
-    const lines = csvText.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const lines = csvText.trim().split('\n');
+    if (lines.length < 2) {
+      return { leads: [], errors: ['CSV file is empty or has no data rows'] };
+    }
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase());
     
-    // Expected headers (flexible mapping)
-    const headerMap = {
-      'phone': ['phone', 'phone_number', 'phonenumber', 'mobile', 'cell'],
-      'first_name': ['first_name', 'firstname', 'fname', 'first'],
-      'last_name': ['last_name', 'lastname', 'lname', 'last'],
-      'email': ['email', 'email_address', 'emailaddress'],
-      'company': ['company', 'business', 'organization'],
-      'address': ['address', 'street', 'location'],
-      'city': ['city'],
-      'state': ['state', 'province'],
-      'zip': ['zip', 'zipcode', 'postal', 'postalcode'],
-      'notes': ['notes', 'comments', 'description']
+    // Enhanced column mapping for multiple phone numbers
+    const columnMap = {
+      phone: findColumn(headers, ['phone', 'phone1', 'phone_number', 'primary_phone', 'mobile', 'cell']),
+      phone2: findColumn(headers, ['phone2', 'phone_2', 'secondary_phone', 'alternate_phone', 'home_phone']),
+      phone3: findColumn(headers, ['phone3', 'phone_3', 'work_phone', 'office_phone', 'business_phone']),
+      first_name: findColumn(headers, ['first_name', 'fname', 'first', 'firstname']),
+      last_name: findColumn(headers, ['last_name', 'lname', 'last', 'lastname', 'surname']),
+      email: findColumn(headers, ['email', 'email_address', 'e_mail']),
+      company: findColumn(headers, ['company', 'business', 'organization', 'employer']),
+      address: findColumn(headers, ['address', 'street', 'address1']),
+      city: findColumn(headers, ['city', 'town']),
+      state: findColumn(headers, ['state', 'province', 'region']),
+      zip: findColumn(headers, ['zip', 'postal_code', 'zipcode', 'postcode'])
     };
 
-    // Find column indices
-    const columnMap = {};
-    Object.keys(headerMap).forEach(key => {
-      const matchingHeader = headers.find(h => headerMap[key].includes(h));
-      if (matchingHeader) {
-        columnMap[key] = headers.indexOf(matchingHeader);
-      }
-    });
-
-    // Parse rows
     const leads = [];
     const errors = [];
-    
+
     for (let i = 1; i < lines.length; i++) {
-      if (lines[i].trim() === '') continue;
-      
-      const cells = lines[i].split(',').map(c => c.trim());
+      const cells = lines[i].split(',').map(cell => cell.trim());
       const lead = {};
-      
-      // Extract data based on column mapping
+
+      // Basic info mapping
       Object.keys(columnMap).forEach(key => {
         if (columnMap[key] !== undefined && cells[columnMap[key]]) {
           lead[key] = cells[columnMap[key]].replace(/"/g, '');
         }
       });
 
+      // Smart phone number handling
+      const phoneNumbers = [];
+      ['phone', 'phone2', 'phone3'].forEach(phoneField => {
+        if (lead[phoneField] && /^\+?[\d\s\-\(\)]{10,}$/.test(lead[phoneField])) {
+          phoneNumbers.push({
+            number: lead[phoneField],
+            type: phoneField === 'phone' ? 'primary' : phoneField === 'phone2' ? 'secondary' : 'tertiary',
+            attempts: 0,
+            lastCalled: null,
+            isActive: true
+          });
+        }
+      });
+
       // Validation
-      if (!lead.phone) {
-        errors.push(`Row ${i + 1}: Missing phone number`);
-      } else if (!/^\+?[\d\s\-\(\)]{10,}$/.test(lead.phone)) {
-        errors.push(`Row ${i + 1}: Invalid phone number format`);
+      if (phoneNumbers.length === 0) {
+        errors.push(`Row ${i + 1}: No valid phone numbers found`);
+        continue;
       }
 
       if (lead.email && !/\S+@\S+\.\S+/.test(lead.email)) {
         errors.push(`Row ${i + 1}: Invalid email format`);
       }
 
-      // Add metadata
-      lead.id = `lead_${Date.now()}_${i}`;
-      lead.status = 'new';
-      lead.created_at = new Date().toISOString();
+      // Enhanced lead object with smart mapping
+      const enhancedLead = {
+        id: `lead_${Date.now()}_${i}`,
+        first_name: lead.first_name || '',
+        last_name: lead.last_name || '',
+        email: lead.email || '',
+        company: lead.company || '',
+        address: lead.address || '',
+        city: lead.city || '',
+        state: lead.state || '',
+        zip: lead.zip || '',
+        phone: phoneNumbers[0].number, // Primary phone for display
+        phoneNumbers: phoneNumbers, // All phone numbers with metadata
+        currentPhoneIndex: 0, // Track which phone number to use next
+        totalAttempts: 0,
+        status: 'new',
+        priority: phoneNumbers.length > 1 ? 'high' : 'normal', // Higher priority for multiple numbers
+        created_at: new Date().toISOString(),
+        lastModified: new Date().toISOString(),
+        tags: phoneNumbers.length > 1 ? ['multiple_numbers'] : []
+      };
 
-      leads.push(lead);
+      leads.push(enhancedLead);
     }
 
     return { leads, errors };
+  };
+
+  // Smart Lead Mapping Functions
+  const getNextPhoneNumber = (lead) => {
+    if (!lead.phoneNumbers || lead.phoneNumbers.length === 0) {
+      return null;
+    }
+
+    // Find the current phone number
+    const currentPhone = lead.phoneNumbers[lead.currentPhoneIndex];
+    
+    // Check if current phone should be rotated (after 3 attempts or if marked inactive)
+    if (currentPhone.attempts >= 3 || !currentPhone.isActive) {
+      // Find next active phone number
+      const activePhones = lead.phoneNumbers.filter(phone => phone.isActive && phone.attempts < 3);
+      
+      if (activePhones.length === 0) {
+        // All numbers exhausted
+        return null;
+      }
+
+      // Rotate to next available number
+      const nextPhoneIndex = lead.phoneNumbers.findIndex(phone => 
+        phone.isActive && phone.attempts < 3 && phone !== currentPhone
+      );
+
+      if (nextPhoneIndex !== -1) {
+        lead.currentPhoneIndex = nextPhoneIndex;
+        return lead.phoneNumbers[nextPhoneIndex];
+      }
+    }
+
+    return currentPhone;
+  };
+
+  const recordCallAttempt = (lead, phoneNumber, result) => {
+    // Update the specific phone number's attempt count
+    const phoneIndex = lead.phoneNumbers.findIndex(p => p.number === phoneNumber.number);
+    if (phoneIndex !== -1) {
+      lead.phoneNumbers[phoneIndex].attempts++;
+      lead.phoneNumbers[phoneIndex].lastCalled = new Date().toISOString();
+      
+      // Mark as inactive if no answer after multiple attempts
+      if (result === 'no_answer' && lead.phoneNumbers[phoneIndex].attempts >= 3) {
+        lead.phoneNumbers[phoneIndex].isActive = false;
+      }
+
+      // If answered, mark others as lower priority temporarily
+      if (result === 'answered') {
+        lead.phoneNumbers.forEach((p, idx) => {
+          if (idx !== phoneIndex) {
+            p.attempts = Math.max(p.attempts, 1); // Deprioritize other numbers
+          }
+        });
+      }
+    }
+
+    // Update overall lead stats
+    lead.totalAttempts++;
+    lead.lastModified = new Date().toISOString();
+
+    // Determine if lead should be marked as exhausted
+    const activePhones = lead.phoneNumbers.filter(p => p.isActive && p.attempts < 3);
+    if (activePhones.length === 0) {
+      lead.status = 'exhausted';
+    } else if (result === 'answered') {
+      lead.status = 'contacted';
+    } else {
+      lead.status = 'attempted';
+    }
+
+    return lead;
+  };
+
+  const getLeadCallPriority = (lead) => {
+    // Calculate priority score based on:
+    // 1. Number of available phone numbers
+    // 2. Total attempts made
+    // 3. Time since last attempt
+    // 4. Lead priority tag
+
+    const activePhones = lead.phoneNumbers.filter(p => p.isActive && p.attempts < 3);
+    const phoneScore = activePhones.length * 10; // More numbers = higher priority
+
+    const attemptScore = Math.max(0, 10 - lead.totalAttempts); // Fewer attempts = higher priority
+
+    let timeScore = 0;
+    if (lead.phoneNumbers.length > 0) {
+      const lastCalled = lead.phoneNumbers
+        .map(p => p.lastCalled)
+        .filter(Boolean)
+        .sort()
+        .pop();
+      
+      if (lastCalled) {
+        const hoursSinceLastCall = (Date.now() - new Date(lastCalled).getTime()) / (1000 * 60 * 60);
+        timeScore = Math.min(10, Math.floor(hoursSinceLastCall / 2)); // 2+ hours = higher priority
+      } else {
+        timeScore = 10; // Never called = highest priority
+      }
+    }
+
+    const priorityBonus = lead.priority === 'high' ? 5 : 0;
+
+    return phoneScore + attemptScore + timeScore + priorityBonus;
+  };
+
+  // Enhanced upload function with smart mapping support
+  const uploadLeadsWithSmartMapping = async (leads, campaignId) => {
+    const enhancedLeads = leads.map(lead => ({
+      ...lead,
+      smartMappingEnabled: true,
+      callPriority: getLeadCallPriority(lead)
+    }));
+
+    // Sort by priority before uploading
+    enhancedLeads.sort((a, b) => b.callPriority - a.callPriority);
+
+    return apiService.uploadLeads(campaignId, enhancedLeads);
   };
 
   // Handle file selection
@@ -146,16 +298,20 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
       setParsedLeads(leads);
       setValidationErrors(errors);
       
-      // Calculate stats
+      // Calculate stats with smart mapping info
       const validLeads = leads.filter(lead => 
-        lead.phone && /^\+?[\d\s\-\(\)]{10,}$/.test(lead.phone)
+        lead.phoneNumbers && lead.phoneNumbers.length > 0
       );
+      
+      const multiNumberLeads = validLeads.filter(lead => lead.phoneNumbers.length > 1);
+      const totalPhoneNumbers = validLeads.reduce((sum, lead) => sum + lead.phoneNumbers.length, 0);
       
       setUploadStats({
         total: leads.length,
         valid: validLeads.length,
         invalid: leads.length - validLeads.length,
-        duplicates: 0 // TODO: Implement duplicate detection
+        multiNumber: multiNumberLeads.length,
+        totalPhoneNumbers: totalPhoneNumbers
       });
 
       if (errors.length > 0) {
@@ -168,7 +324,7 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
     reader.readAsText(file);
   };
 
-  // Upload leads to campaign
+  // Upload leads to campaign with smart mapping
   const handleUploadLeads = async () => {
     if (!selectedCampaign) {
       toast.error('Please select a campaign first');
@@ -184,10 +340,21 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
     setUploadProgress(0);
 
     try {
-      // Filter out invalid leads
+      // Filter out leads with no valid phone numbers
       const validLeads = parsedLeads.filter(lead => 
-        lead.phone && /^\+?[\d\s\-\(\)]{10,}$/.test(lead.phone)
+        lead.phoneNumbers && lead.phoneNumbers.length > 0
       );
+
+      if (validLeads.length === 0) {
+        toast.error('No leads with valid phone numbers found');
+        setIsUploading(false);
+        return;
+      }
+
+      // Count total and multi-number leads
+      const multiNumberLeads = validLeads.filter(lead => lead.phoneNumbers.length > 1);
+      
+      toast.success(`Uploading ${validLeads.length} leads (${multiNumberLeads.length} with multiple numbers)`);
 
       // Simulate progress updates
       const totalLeads = validLeads.length;
@@ -196,8 +363,8 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
       for (let i = 0; i < totalLeads; i += chunkSize) {
         const chunk = validLeads.slice(i, i + chunkSize);
         
-        // Upload chunk
-        await apiService.uploadLeads(selectedCampaign, chunk);
+        // Upload chunk with smart mapping
+        await uploadLeadsWithSmartMapping(chunk, selectedCampaign);
         
         // Update progress
         const progress = Math.min(100, ((i + chunkSize) / totalLeads) * 100);
@@ -256,7 +423,7 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
         <Grid item xs={12} md={6}>
           <Card sx={{ 
             background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-            border: '2px solid #FFD700'
+            border: '2px solid #D4AF37' // Changed from bright #FFD700 to softer gold
           }}>
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 3, color: 'primary.main' }}>
@@ -281,7 +448,7 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
 
               {/* File Upload */}
               <Box sx={{ 
-                border: '2px dashed #FFD700', 
+                border: '2px dashed #D4AF37', // Changed from bright #FFD700 to softer gold
                 borderRadius: 2, 
                 p: 3, 
                 textAlign: 'center',
@@ -289,7 +456,7 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
                 '&:hover': {
-                  backgroundColor: 'rgba(255, 215, 0, 0.1)'
+                  backgroundColor: 'rgba(212, 175, 55, 0.08)' // Updated to match new color with low opacity
                 }
               }}
               onClick={() => fileInputRef.current?.click()}
@@ -320,7 +487,7 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
                     borderColor: 'primary.main',
                     color: 'primary.main',
                     '&:hover': { 
-                      backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                      backgroundColor: 'rgba(212, 175, 55, 0.08)', // Updated to softer gold
                       borderColor: 'primary.light'
                     }
                   }}
@@ -337,7 +504,7 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
                       borderColor: 'secondary.main',
                       color: 'secondary.main',
                       '&:hover': { 
-                        backgroundColor: 'rgba(0, 200, 81, 0.1)',
+                        backgroundColor: 'rgba(76, 175, 80, 0.08)', // Updated to softer green
                         borderColor: 'secondary.light'
                       }
                     }}
@@ -376,11 +543,11 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
                 onClick={handleUploadLeads}
                 disabled={!selectedCampaign || parsedLeads.length === 0 || isUploading}
                 sx={{
-                  background: 'linear-gradient(45deg, #FFD700 30%, #FFA000 90%)',
+                  background: 'linear-gradient(45deg, #D4AF37 30%, #B8860B 90%)', // Updated to softer gold
                   color: 'black',
                   fontWeight: 700,
                   '&:hover': {
-                    background: 'linear-gradient(45deg, #FFA000 30%, #FFD700 90%)'
+                    background: 'linear-gradient(45deg, #B8860B 30%, #D4AF37 90%)' // Updated to softer gold
                   },
                   '&:disabled': {
                     background: '#333',
@@ -398,7 +565,7 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
         <Grid item xs={12} md={6}>
           <Card sx={{ 
             background: 'linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%)',
-            border: '2px solid #00C851'
+            border: '2px solid #4CAF50' // Updated to softer green
           }}>
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 3, color: 'secondary.main' }}>
@@ -439,10 +606,23 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
                 <Grid item xs={6}>
                   <Box sx={{ textAlign: 'center', p: 2, border: '1px solid #333', borderRadius: 1 }}>
                     <Typography variant="h4" sx={{ color: 'info.main', fontWeight: 700 }}>
-                      {uploadStats.duplicates}
+                      {uploadStats.multiNumber || 0}
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Duplicates
+                      Multi-Number
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ textAlign: 'center', p: 2, border: '1px solid #D4AF37', borderRadius: 1, background: 'rgba(212, 175, 55, 0.05)' }}>
+                    <Typography variant="h4" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                      {uploadStats.totalPhoneNumbers || 0}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Total Phone Numbers
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'primary.main', display: 'block', mt: 1 }}>
+                      Smart rotation enabled for multi-number leads
                     </Typography>
                   </Box>
                 </Grid>
@@ -450,25 +630,42 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
 
               {/* Validation Errors */}
               {validationErrors.length > 0 && (
-                <Box sx={{ mt: 3 }}>
-                  <Alert severity="warning" sx={{ mb: 2 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      Found {validationErrors.length} validation errors:
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Validation Issues:
+                  </Typography>
+                  {validationErrors.slice(0, 5).map((error, index) => (
+                    <Typography key={index} variant="caption" sx={{ display: 'block' }}>
+                      • {error}
                     </Typography>
-                  </Alert>
-                  <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-                    {validationErrors.slice(0, 10).map((error, index) => (
-                      <Typography key={index} variant="body2" sx={{ color: 'warning.main', mb: 0.5 }}>
-                        • {error}
-                      </Typography>
-                    ))}
-                    {validationErrors.length > 10 && (
-                      <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-                        ... and {validationErrors.length - 10} more errors
-                      </Typography>
-                    )}
+                  ))}
+                  {validationErrors.length > 5 && (
+                    <Typography variant="caption" sx={{ color: 'warning.main' }}>
+                      ... and {validationErrors.length - 5} more issues
+                    </Typography>
+                  )}
+                </Alert>
+              )}
+
+              {/* Smart Mapping Info Panel */}
+              {parsedLeads.some(lead => lead.phoneNumbers && lead.phoneNumbers.length > 1) && (
+                <Alert severity="info" sx={{ mt: 2, background: 'rgba(212, 175, 55, 0.1)', border: '1px solid #D4AF37' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <PanTool sx={{ color: 'primary.main', fontSize: 20 }} />
+                    <Typography variant="subtitle2" sx={{ color: 'primary.main' }}>
+                      Smart Lead Mapping Detected
+                    </Typography>
                   </Box>
-                </Box>
+                  <Typography variant="body2" sx={{ color: 'text.primary', mb: 1 }}>
+                    {parsedLeads.filter(lead => lead.phoneNumbers && lead.phoneNumbers.length > 1).length} leads have multiple phone numbers.
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    • AI will automatically rotate between phone numbers<br/>
+                    • After 3 failed attempts, system switches to alternate number<br/>
+                    • Leads with multiple numbers get higher calling priority<br/>
+                    • Smart timing prevents over-calling same numbers
+                  </Typography>
+                </Alert>
               )}
 
               {/* File Info */}
@@ -508,17 +705,28 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>Phone</TableCell>
+                  <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>Phone Numbers</TableCell>
                   <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>Name</TableCell>
                   <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>Email</TableCell>
                   <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>Company</TableCell>
-                  <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>Priority</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {parsedLeads.slice(0, 100).map((lead, index) => (
                   <TableRow key={index}>
-                    <TableCell sx={{ color: 'white' }}>{lead.phone}</TableCell>
+                    <TableCell sx={{ color: 'white' }}>
+                      <Box>
+                        <Typography variant="body2" sx={{ color: 'white' }}>
+                          {lead.phone} (Primary)
+                        </Typography>
+                        {lead.phoneNumbers && lead.phoneNumbers.length > 1 && (
+                          <Typography variant="caption" sx={{ color: 'primary.main' }}>
+                            +{lead.phoneNumbers.length - 1} more numbers
+                          </Typography>
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell sx={{ color: 'white' }}>
                       {[lead.first_name, lead.last_name].filter(Boolean).join(' ') || '-'}
                     </TableCell>
@@ -526,10 +734,26 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
                     <TableCell sx={{ color: 'white' }}>{lead.company || '-'}</TableCell>
                     <TableCell>
                       <Chip 
-                        label={lead.status} 
+                        label={lead.priority || 'normal'} 
                         size="small" 
-                        color={lead.phone && /^\+?[\d\s\-\(\)]{10,}$/.test(lead.phone) ? 'success' : 'error'}
+                        color={lead.priority === 'high' ? 'secondary' : 'default'}
+                        sx={{
+                          background: lead.priority === 'high' ? '#FF6B35' : '#666',
+                          color: 'white'
+                        }}
                       />
+                      {lead.phoneNumbers && lead.phoneNumbers.length > 1 && (
+                        <Chip 
+                          label="Multi-#" 
+                          size="small" 
+                          sx={{
+                            ml: 1,
+                            background: '#D4AF37',
+                            color: 'black',
+                            fontSize: '0.7rem'
+                          }}
+                        />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

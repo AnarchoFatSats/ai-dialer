@@ -421,6 +421,111 @@ class APIService {
       throw new Error(`Failed to assign numbers: ${error.response?.data?.detail || error.message}`);
     }
   }
+
+  // Smart Lead Mapping Functions
+  getNextPhoneNumber(lead) {
+    if (!lead.phoneNumbers || lead.phoneNumbers.length === 0) {
+      return null;
+    }
+
+    // Find the current phone number
+    const currentPhone = lead.phoneNumbers[lead.currentPhoneIndex];
+    
+    // Check if current phone should be rotated (after 3 attempts or if marked inactive)
+    if (currentPhone.attempts >= 3 || !currentPhone.isActive) {
+      // Find next active phone number
+      const activePhones = lead.phoneNumbers.filter(phone => phone.isActive && phone.attempts < 3);
+      
+      if (activePhones.length === 0) {
+        // All numbers exhausted
+        return null;
+      }
+
+      // Rotate to next available number
+      const nextPhoneIndex = lead.phoneNumbers.findIndex(phone => 
+        phone.isActive && phone.attempts < 3 && phone !== currentPhone
+      );
+
+      if (nextPhoneIndex !== -1) {
+        lead.currentPhoneIndex = nextPhoneIndex;
+        return lead.phoneNumbers[nextPhoneIndex];
+      }
+    }
+
+    return currentPhone;
+  }
+
+  recordCallAttempt(lead, phoneNumber, result) {
+    // Update the specific phone number's attempt count
+    const phoneIndex = lead.phoneNumbers.findIndex(p => p.number === phoneNumber.number);
+    if (phoneIndex !== -1) {
+      lead.phoneNumbers[phoneIndex].attempts++;
+      lead.phoneNumbers[phoneIndex].lastCalled = new Date().toISOString();
+      
+      // Mark as inactive if no answer after multiple attempts
+      if (result === 'no_answer' && lead.phoneNumbers[phoneIndex].attempts >= 3) {
+        lead.phoneNumbers[phoneIndex].isActive = false;
+      }
+
+      // If answered, mark others as lower priority temporarily
+      if (result === 'answered') {
+        lead.phoneNumbers.forEach((p, idx) => {
+          if (idx !== phoneIndex) {
+            p.attempts = Math.max(p.attempts, 1); // Deprioritize other numbers
+          }
+        });
+      }
+    }
+
+    // Update overall lead stats
+    lead.totalAttempts++;
+    lead.lastModified = new Date().toISOString();
+
+    // Determine if lead should be marked as exhausted
+    const activePhones = lead.phoneNumbers.filter(p => p.isActive && p.attempts < 3);
+    if (activePhones.length === 0) {
+      lead.status = 'exhausted';
+    } else if (result === 'answered') {
+      lead.status = 'contacted';
+    } else {
+      lead.status = 'attempted';
+    }
+
+    return lead;
+  }
+
+  getLeadCallPriority(lead) {
+    // Calculate priority score based on:
+    // 1. Number of available phone numbers
+    // 2. Total attempts made
+    // 3. Time since last attempt
+    // 4. Lead priority tag
+
+    const activePhones = lead.phoneNumbers.filter(p => p.isActive && p.attempts < 3);
+    const phoneScore = activePhones.length * 10; // More numbers = higher priority
+
+    const attemptScore = Math.max(0, 10 - lead.totalAttempts); // Fewer attempts = higher priority
+
+    let timeScore = 0;
+    if (lead.phoneNumbers.length > 0) {
+      const lastCalled = lead.phoneNumbers
+        .map(p => p.lastCalled)
+        .filter(Boolean)
+        .sort()
+        .pop();
+      
+      if (lastCalled) {
+        const hoursSinceLastCall = (Date.now() - new Date(lastCalled).getTime()) / (1000 * 60 * 60);
+        timeScore = Math.min(10, Math.floor(hoursSinceLastCall / 2)); // 2+ hours = higher priority
+      } else {
+        timeScore = 10; // Never called = highest priority
+      }
+    }
+
+    const priorityBonus = lead.priority === 'high' ? 5 : 0;
+
+    return phoneScore + attemptScore + timeScore + priorityBonus;
+  }
 }
 
 // Export singleton instance
