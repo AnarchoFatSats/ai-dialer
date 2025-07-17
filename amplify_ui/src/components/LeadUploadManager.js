@@ -265,6 +265,9 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
 
   // Enhanced upload function with smart mapping support
   const uploadLeadsWithSmartMapping = async (leads, campaignId) => {
+    if (!Array.isArray(leads)) {
+      throw new Error('Invalid leads data provided');
+    }
     const enhancedLeads = leads.map(lead => ({
       ...lead,
       smartMappingEnabled: true,
@@ -438,11 +441,13 @@ const LeadUploadManager = ({ apiService, campaigns }) => {
                   onChange={(e) => setSelectedCampaign(e.target.value)}
                   sx={{ color: 'white' }}
                 >
-                  {campaigns?.map((campaign) => (
+                  {Array.isArray(campaigns) ? campaigns.map((campaign) => (
                     <MenuItem key={campaign.id} value={campaign.id}>
                       {campaign.name} ({campaign.status})
                     </MenuItem>
-                  ))}
+                  )) : (
+                    <MenuItem disabled>No campaigns available</MenuItem>
+                  )}
                 </Select>
               </FormControl>
 

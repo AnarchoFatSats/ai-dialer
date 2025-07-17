@@ -268,10 +268,19 @@ function App() {
   const loadCampaigns = async () => {
     try {
       const campaignsData = await apiService.getCampaigns();
-      setCampaigns(campaignsData || []);
+      // Handle different response formats from backend
+      if (Array.isArray(campaignsData)) {
+        setCampaigns(campaignsData);
+      } else if (campaignsData?.data && Array.isArray(campaignsData.data)) {
+        setCampaigns(campaignsData.data);
+      } else if (campaignsData?.campaigns && Array.isArray(campaignsData.campaigns)) {
+        setCampaigns(campaignsData.campaigns);
+      } else {
+        console.warn('Campaigns API returned unexpected format:', campaignsData);
+        setCampaigns([]);
+      }
     } catch (error) {
       console.error('Failed to load campaigns:', error);
-      // NO MORE MOCK CAMPAIGNS - Leave empty
       setCampaigns([]);
       toast.error('Failed to load campaigns from backend');
     }
