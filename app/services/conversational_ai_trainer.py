@@ -199,191 +199,181 @@ Just describe your goal in plain English, and I'll ask some questions to build t
         # Get historical data for similar campaigns
         similar_campaigns = await self._find_similar_campaigns(context.primary_goal, context.industry)
         
+        # Build conversation context for Claude
+        conversation_history = self._format_conversation_history(context.conversation_history)
+        
+        # Create system prompt for conversational response
+        system_prompt = f"""You are an expert AI campaign trainer helping a user create effective calling campaigns. 
+        You have a conversational, helpful personality and guide users through campaign creation naturally.
+        
+        Current context:
+        - User's goal: {context.primary_goal}
+        - Industry: {context.industry or 'Unknown'}
+        - Similar campaign success rate: {similar_campaigns[0].get('success_rate', 0):.1f}% if similar_campaigns else 'No historical data'
+        
+        Your task: Acknowledge their goal warmly and ask about their target audience. Be conversational and encouraging.
+        Keep response under 100 words."""
+        
+        # Generate conversational response using Claude
+        conversational_response = await claude_service.generate_content(
+            prompt=f"User just said: '{user_message}'\n\nConversation so far:\n{conversation_history}\n\nPlease respond naturally and ask about their target audience.",
+            system_prompt=system_prompt
+        )
+        
         context.state = ConversationState.UNDERSTANDING_GOAL
         
-        message = f"Perfect! So you want to **{context.primary_goal}**. "
-        
-        if similar_campaigns:
-            best_campaign = similar_campaigns[0]
-            success_rate = best_campaign.get('success_rate', 0)
-            message += f"I found similar campaigns in your history with up to {success_rate:.1f}% success rate.\n\n"
-        
-        message += "To build the most effective campaign, I need to understand your target audience better.\n\n"
-        message += "**Who are you trying to reach?**\n\n"
-        message += "Tell me about your ideal customer - for example:\n"
-        message += "- Demographics (age, income, location)\n"
-        message += "- Pain points they have\n"
-        message += "- What motivates them to take action"
-        
         return {
-            "message": message,
+            "message": conversational_response,
             "state": context.state.value,
             "suggested_responses": [
-                "Homeowners with high electric bills",
-                "Small business owners needing insurance",
-                "Families looking to save money"
+                "Homeowners aged 30-60 with solar potential",
+                "Small business owners looking for cost savings", 
+                "Property managers managing multiple locations"
             ]
         }
-    
+
     async def _handle_goal_clarification(self, context: ConversationContext, user_message: str) -> Dict[str, Any]:
-        """Handle goal clarification and audience definition"""
+        """Handle goal clarification phase"""
         
-        # Analyze the audience description
-        audience_analysis = await claude_service.analyze_text(
-            f"Analyze this target audience description: '{user_message}'\n\n"
-            f"Extract key characteristics, pain points, and motivations. "
-            f"Suggest the best communication approach for this audience."
+        # Build conversation context
+        conversation_history = self._format_conversation_history(context.conversation_history)
+        
+        # Create system prompt for this phase
+        system_prompt = f"""You are an expert AI campaign trainer. The user has shared their goal: {context.primary_goal}
+        
+        Now they've provided more details. Your task:
+        1. Acknowledge what they shared
+        2. Ask clarifying questions about their target audience or approach
+        3. Be conversational and helpful
+        4. Keep response under 80 words
+        
+        Guide them toward understanding their ideal customer profile."""
+        
+        # Generate conversational response
+        response = await claude_service.generate_content(
+            prompt=f"User just said: '{user_message}'\n\nConversation history:\n{conversation_history}\n\nPlease respond naturally and continue gathering information about their target audience.",
+            system_prompt=system_prompt
         )
         
-        context.target_audience = user_message
         context.state = ConversationState.GATHERING_CONTEXT
         
-        # Learn from historical data about this audience type
-        audience_insights = await self._get_audience_insights(context.target_audience)
-        
-        message = f"Great! I understand you're targeting **{context.target_audience}**.\n\n"
-        
-        if audience_insights:
-            message += f"💡 **Based on your previous campaigns with similar audiences:**\n"
-            for insight in audience_insights[:2]:
-                message += f"- {insight.description}\n"
-            message += "\n"
-        
-        message += "Now, let's talk about your approach. **How do you usually interact with customers?**\n\n"
-        message += "Are you more:\n"
-        message += "- Professional and consultative?\n"
-        message += "- Friendly and conversational?\n"
-        message += "- Direct and results-focused?\n"
-        message += "- Educational and helpful?\n\n"
-        message += "Or describe your own style in your own words."
-        
         return {
-            "message": message,
+            "message": response,
             "state": context.state.value,
             "suggested_responses": [
-                "Professional and consultative",
-                "Friendly and conversational", 
-                "Direct and results-focused",
-                "Educational and helpful"
+                "Tell me more about their pain points",
+                "What motivates them to buy?",
+                "When are they most likely to answer calls?"
             ]
         }
-    
+
     async def _handle_context_gathering(self, context: ConversationContext, user_message: str) -> Dict[str, Any]:
-        """Handle approach and style preferences"""
+        """Handle context gathering phase"""
         
-        # Analyze communication style
-        style_analysis = await claude_service.analyze_text(
-            f"Analyze this communication style preference: '{user_message}'\n\n"
-            f"Determine: tone (professional/friendly/casual), pace (fast/medium/slow), "
-            f"energy (high/medium/low), and approach (consultative/direct/educational)."
+        # Store audience information
+        context.target_audience = user_message
+        
+        # Build conversation context
+        conversation_history = self._format_conversation_history(context.conversation_history)
+        
+        # Create system prompt
+        system_prompt = f"""You are an expert AI campaign trainer. 
+        
+        Context:
+        - Goal: {context.primary_goal}
+        - Target audience info: {context.target_audience}
+        
+        Your task: Acknowledge their audience details and ask about their preferred conversation style/approach.
+        Be conversational and keep under 80 words."""
+        
+        # Generate response
+        response = await claude_service.generate_content(
+            prompt=f"User just shared: '{user_message}'\n\nConversation:\n{conversation_history}\n\nAsk about their preferred conversation style or approach.",
+            system_prompt=system_prompt
         )
         
-        context.preferred_tone = user_message
         context.state = ConversationState.CLARIFYING_AUDIENCE
         
-        # Get performance data for similar styles
-        style_performance = await self._get_style_performance(user_message)
-        
-        message = f"Perfect! A **{user_message}** approach can work really well.\n\n"
-        
-        if style_performance:
-            message += f"📊 **Performance insight**: Similar styles have achieved {style_performance['success_rate']:.1f}% success rates.\n\n"
-        
-        message += "One more important question: **What's the biggest challenge or objection you typically face?**\n\n"
-        message += "For example:\n"
-        message += "- \"I'm not interested\"\n"
-        message += "- \"I don't have time right now\"\n"
-        message += "- \"I need to think about it\"\n"
-        message += "- \"It's too expensive\"\n\n"
-        message += "This helps me prepare the AI to handle these situations effectively."
-        
         return {
-            "message": message,
+            "message": response,
             "state": context.state.value,
             "suggested_responses": [
-                "People say they're not interested",
-                "They don't have time to talk",
-                "Price is always an objection",
-                "They want to think about it"
+                "Professional and direct approach",
+                "Friendly and consultative style",
+                "Educational approach with facts"
             ]
         }
-    
+
     async def _handle_audience_clarification(self, context: ConversationContext, user_message: str) -> Dict[str, Any]:
-        """Handle objection identification and preparation"""
+        """Handle audience clarification phase"""
         
-        # Analyze common objections
-        objection_analysis = await claude_service.analyze_text(
-            f"Analyze this common objection: '{user_message}'\n\n"
-            f"Suggest 3 effective response strategies that maintain rapport while addressing the concern."
+        # Store conversation preferences
+        context.preferred_tone = user_message
+        
+        # Build conversation context
+        conversation_history = self._format_conversation_history(context.conversation_history)
+        
+        # Create system prompt
+        system_prompt = f"""You are an expert AI campaign trainer.
+        
+        Context:
+        - Goal: {context.primary_goal}
+        - Audience: {context.target_audience}
+        - Preferred style: {context.preferred_tone}
+        
+        Your task: Acknowledge their preferences and start generating their campaign. Be excited and confident.
+        Keep under 60 words."""
+        
+        # Generate response
+        response = await claude_service.generate_content(
+            prompt=f"User said: '{user_message}'\n\nConversation:\n{conversation_history}\n\nTell them you're now generating their optimized campaign.",
+            system_prompt=system_prompt
         )
         
-        context.state = ConversationState.OPTIMIZING_APPROACH
+        context.state = ConversationState.GENERATING_CAMPAIGN
         
-        # Learn from historical objection handling
-        objection_insights = await self._get_objection_insights(user_message)
-        
-        message = f"Good to know! **\"{user_message}\"** is definitely something we can handle well.\n\n"
-        
-        if objection_insights:
-            best_response = objection_insights[0]
-            message += f"💡 **Successful approach**: {best_response.description}\n\n"
-        
-        message += "Now I'm ready to create your campaign! But first, let me show you what I've learned from analyzing your call performance data.\n\n"
-        
-        # Get real learning insights
-        learning_insights = await self._analyze_performance_patterns(context)
-        
-        if learning_insights:
-            message += "📈 **Key insights from your data:**\n"
-            for insight in learning_insights[:3]:
-                message += f"- {insight.description}\n"
-            message += "\n"
-        
-        message += "**Should I create a campaign optimized based on these insights?**\n\n"
-        message += "I'll generate:\n"
-        message += "✓ AI conversation prompts for each stage\n"
-        message += "✓ Objection handling responses\n"
-        message += "✓ Voice and pacing settings\n"
-        message += "✓ Success triggers and transfer points\n"
-        message += "✓ Real-time optimization based on your data"
+        # Generate the actual campaign
+        campaign_config = await self._generate_campaign_configuration(context)
+        context.conversation_flow = campaign_config
         
         return {
-            "message": message,
-            "state": context.state.value,
+            "message": response + "\n\n✨ **Campaign Generated!** I've created a customized campaign based on your requirements. Would you like to review it or deploy it now?",
+            "state": ConversationState.READY_TO_DEPLOY,
+            "campaign_config": campaign_config,
             "suggested_responses": [
-                "Yes, create the campaign!",
-                "Tell me more about the insights",
-                "What specific optimizations will you make?"
+                "Show me the campaign details",
+                "Deploy it now",
+                "Let me make some adjustments first"
             ]
         }
     
     async def _handle_approach_optimization(self, context: ConversationContext, user_message: str) -> Dict[str, Any]:
         """Handle final optimization and campaign generation"""
         
-        if "yes" in user_message.lower() or "create" in user_message.lower():
+        # Build conversation context
+        conversation_history = self._format_conversation_history(context.conversation_history)
+        
+        if "yes" in user_message.lower() or "create" in user_message.lower() or "generate" in user_message.lower():
             context.state = ConversationState.GENERATING_CAMPAIGN
             
             # Generate the complete campaign
-            campaign_config = await self._generate_optimized_campaign(context)
+            campaign_config = await self._generate_campaign_configuration(context)
             
-            message = f"🎉 **Your AI campaign is ready!**\n\n"
-            message += f"**Campaign Name**: {campaign_config['name']}\n"
-            message += f"**Primary Goal**: {context.primary_goal}\n"
-            message += f"**Target Audience**: {context.target_audience}\n"
-            message += f"**Communication Style**: {context.preferred_tone}\n\n"
+            # Use Claude to generate a conversational campaign reveal
+            system_prompt = f"""You are an expert AI campaign trainer who just created a campaign.
             
-            message += "**🤖 AI Configuration Generated:**\n"
-            message += f"- Conversation stages: {len(campaign_config['ai_prompts'])} optimized prompts\n"
-            message += f"- Objection handlers: {len(campaign_config['objection_handlers'])} responses\n"
-            message += f"- Voice settings: Optimized for {context.preferred_tone} approach\n"
-            message += f"- Success triggers: {len(campaign_config['transfer_triggers'])} conditions\n\n"
+            Campaign details:
+            - Goal: {context.primary_goal}
+            - Audience: {context.target_audience}
+            - Style: {context.preferred_tone}
             
-            message += "**📊 Expected Performance** (based on similar campaigns):\n"
-            message += f"- Answer rate: {campaign_config['projections']['answer_rate']:.1f}%\n"
-            message += f"- Qualification rate: {campaign_config['projections']['qualification_rate']:.1f}%\n"
-            message += f"- Transfer rate: {campaign_config['projections']['transfer_rate']:.1f}%\n\n"
+            Your task: Excitedly reveal the campaign is ready with key highlights. Be conversational and enthusiastic.
+            Keep under 120 words."""
             
-            message += "**Ready to launch?** I'll deploy this campaign and it will start learning and optimizing automatically from every call."
+            response = await claude_service.generate_content(
+                prompt=f"User said: '{user_message}'\n\nConversation:\n{conversation_history}\n\nReveal their completed campaign with enthusiasm!",
+                system_prompt=system_prompt
+            )
             
             # Store the campaign configuration
             campaign_id = await self._deploy_campaign(campaign_config, context)
@@ -391,7 +381,7 @@ Just describe your goal in plain English, and I'll ask some questions to build t
             context.state = ConversationState.READY_TO_DEPLOY
             
             return {
-                "message": message,
+                "message": response + f"\n\n✨ **Campaign '{campaign_config.get('name', 'Custom Campaign')}' is ready to launch!**",
                 "state": context.state.value,
                 "campaign_id": campaign_id,
                 "campaign_config": campaign_config,
@@ -402,26 +392,61 @@ Just describe your goal in plain English, and I'll ask some questions to build t
                 ]
             }
         else:
-            return await self._provide_more_details(context, user_message)
+            # Use Claude to handle requests for more details
+            system_prompt = f"""You are an expert AI campaign trainer. The user wants more information before creating their campaign.
+            
+            Context:
+            - Goal: {context.primary_goal}
+            - Audience: {context.target_audience}
+            - Style: {context.preferred_tone}
+            
+            Your task: Provide helpful details about what the campaign will include. Be informative and encouraging.
+            Keep under 100 words."""
+            
+            response = await claude_service.generate_content(
+                prompt=f"User said: '{user_message}'\n\nConversation:\n{conversation_history}\n\nProvide more details about the campaign you'll create.",
+                system_prompt=system_prompt
+            )
+            
+            return {
+                "message": response,
+                "state": context.state.value,
+                "suggested_responses": [
+                    "That sounds perfect, create it!",
+                    "What about objection handling?",
+                    "How will it optimize performance?"
+                ]
+            }
     
     async def _handle_campaign_generation(self, context: ConversationContext, user_message: str) -> Dict[str, Any]:
         """Handle post-generation actions"""
         
-        if "launch" in user_message.lower():
+        # Build conversation context
+        conversation_history = self._format_conversation_history(context.conversation_history)
+        
+        if "launch" in user_message.lower() or "deploy" in user_message.lower():
             # Activate the campaign
-            await self._activate_campaign(context.campaign_id)
+            if context.campaign_id:
+                await self._activate_campaign(context.campaign_id)
             
-            message = f"🚀 **Campaign launched successfully!**\n\n"
-            message += f"Your AI assistant is now live and ready to make calls. It will:\n\n"
-            message += f"✓ Follow the conversation flow we created\n"
-            message += f"✓ Handle objections with the responses we prepared\n"
-            message += f"✓ Learn from every call to improve performance\n"
-            message += f"✓ Automatically optimize based on success patterns\n\n"
-            message += f"**🔄 Continuous Learning**: The AI will analyze each call and adjust its approach to improve success rates.\n\n"
-            message += f"You can monitor performance and the AI's learning progress in the analytics dashboard."
+            # Use Claude to generate a conversational launch confirmation
+            system_prompt = f"""You are an expert AI campaign trainer who just launched a user's campaign.
+            
+            Campaign context:
+            - Goal: {context.primary_goal}
+            - Audience: {context.target_audience}
+            - Style: {context.preferred_tone}
+            
+            Your task: Excitedly confirm the campaign is live and explain what happens next. Be encouraging and specific.
+            Keep under 100 words."""
+            
+            response = await claude_service.generate_content(
+                prompt=f"User said: '{user_message}'\n\nConversation:\n{conversation_history}\n\nConfirm their campaign is now live and explain next steps!",
+                system_prompt=system_prompt
+            )
             
             return {
-                "message": message,
+                "message": response + "\n\n🚀 **Campaign is live!** You can monitor performance in your dashboard.",
                 "state": "launched",
                 "campaign_id": context.campaign_id,
                 "suggested_responses": [
@@ -432,17 +457,23 @@ Just describe your goal in plain English, and I'll ask some questions to build t
             }
         
         elif "test" in user_message.lower():
-            # Set up test mode
-            message = f"🧪 **Test mode activated!**\n\n"
-            message += f"I'll run a small test with 10 calls to validate the configuration before full launch.\n\n"
-            message += f"The test will take about 10-15 minutes and will show you:\n"
-            message += f"- How the AI performs conversations\n"
-            message += f"- Response quality and timing\n"
-            message += f"- Early performance indicators\n\n"
-            message += f"**Start the test now?**"
+            # Use Claude to explain test mode
+            system_prompt = f"""You are an expert AI campaign trainer offering to test a user's campaign before full launch.
+            
+            Campaign context:
+            - Goal: {context.primary_goal}
+            - Audience: {context.target_audience}
+            
+            Your task: Explain how a test campaign works and its benefits. Be encouraging and explain what they'll learn.
+            Keep under 80 words."""
+            
+            response = await claude_service.generate_content(
+                prompt=f"User said: '{user_message}'\n\nConversation:\n{conversation_history}\n\nExplain how to test their campaign first.",
+                system_prompt=system_prompt
+            )
             
             return {
-                "message": message,
+                "message": response + "\n\n🧪 **Test mode available** - Would you like to start with a small test?",
                 "state": "testing",
                 "suggested_responses": [
                     "Start the test",
@@ -452,7 +483,31 @@ Just describe your goal in plain English, and I'll ask some questions to build t
             }
         
         else:
-            return await self._show_campaign_details(context, user_message)
+            # Handle requests for campaign details or other questions
+            system_prompt = f"""You are an expert AI campaign trainer. The user wants to know more about their campaign before launching.
+            
+            Campaign context:
+            - Goal: {context.primary_goal}
+            - Audience: {context.target_audience}
+            - Style: {context.preferred_tone}
+            
+            Your task: Provide helpful information about the campaign. Be informative and encourage next steps.
+            Keep under 80 words."""
+            
+            response = await claude_service.generate_content(
+                prompt=f"User said: '{user_message}'\n\nConversation:\n{conversation_history}\n\nProvide details about their campaign.",
+                system_prompt=system_prompt
+            )
+            
+            return {
+                "message": response,
+                "state": context.state.value,
+                "suggested_responses": [
+                    "Launch the campaign!",
+                    "Let me test it first",
+                    "Show me the conversation scripts"
+                ]
+            }
     
     async def _generate_optimized_campaign(self, context: ConversationContext) -> Dict[str, Any]:
         """Generate complete campaign configuration optimized from learning data"""
@@ -824,6 +879,14 @@ Create empathetic, effective responses that maintain rapport while addressing co
     async def _show_campaign_details(self, context: ConversationContext, user_message: str) -> Dict[str, Any]:
         """Show detailed campaign configuration"""
         return {"message": "Here are the campaign details...", "state": context.state.value}
+
+    def _format_conversation_history(self, history: List[Dict[str, str]]) -> str:
+        """Format conversation history for Claude context"""
+        formatted = []
+        for msg in history[-10:]:  # Only include last 10 messages to stay within token limits
+            role = "Assistant" if msg["role"] == "assistant" else "User"
+            formatted.append(f"{role}: {msg['content']}")
+        return "\n".join(formatted)
 
 
 # Global instance
