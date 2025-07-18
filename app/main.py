@@ -26,6 +26,7 @@ from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.models import *
 from sqlalchemy import select, func, and_, select, text, update, or_, delete
+import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 from app.services.guided_training import (
@@ -2600,6 +2601,95 @@ async def initiate_call_endpoint(request: dict):
     except Exception as e:
         logger.error(f"Error initiating call: {e}")
         return {"success": False, "error": str(e)}
+
+@app.post("/voicemail/detection/start/{call_log_id}", tags=["Voicemail Detection"])
+async def start_voicemail_detection(call_log_id: str):
+    """Start voicemail detection for a call"""
+    try:
+        from app.services.voicemail_detection import voicemail_detection_service
+        
+        result = await voicemail_detection_service.start_detection(int(call_log_id))
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.error(f"Error starting voicemail detection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/voicemail/detection/status/{call_log_id}", tags=["Voicemail Detection"])
+async def get_voicemail_detection_status(call_log_id: str, db=Depends(get_db)):
+    """Get current voicemail detection status for a call"""
+    try:
+        # Get call log with voicemail detection data
+        call_log = await db.get(CallLog, call_log_id)
+        if not call_log:
+            raise HTTPException(status_code=404, detail="Call log not found")
+        
+        return {
+            "call_log_id": call_log_id,
+            "disposition": call_log.disposition.value if call_log.disposition else None,
+            "voicemail_detection_confidence": call_log.voicemail_detection_confidence,
+            "voicemail_message_left": call_log.voicemail_message_left,
+            "beep_detected_at": call_log.beep_detected_at.isoformat() if call_log.beep_detected_at else None,
+            "detection_metadata": call_log.detection_metadata
+        }
+    except Exception as e:
+        logger.error(f"Error getting voicemail detection status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/voicemail/analytics", tags=["Voicemail Detection"])
+async def get_voicemail_analytics(
+    campaign_id: Optional[str] = None,
+    days: int = 30,
+    db=Depends(get_db)
+):
+    """Get voicemail detection analytics"""
+    try:
+        # Build query
+        query = select(
+            CallLog.disposition,
+            func.count(CallLog.id).label('count'),
+            func.avg(CallLog.voicemail_detection_confidence).label('avg_confidence'),
+            func.sum(CallLog.voicemail_message_left.cast(sa.Integer)).label('messages_left')
+        ).where(
+            CallLog.created_at >= datetime.utcnow() - timedelta(days=days)
+        )
+        
+        if campaign_id:
+            query = query.where(CallLog.campaign_id == campaign_id)
+        
+        query = query.group_by(CallLog.disposition)
+        
+        result = await db.execute(query)
+        analytics_data = result.fetchall()
+        
+        # Calculate statistics
+        total_calls = sum(row.count for row in analytics_data)
+        voicemail_calls = sum(row.count for row in analytics_data if row.disposition == CallDisposition.VOICEMAIL)
+        human_calls = total_calls - voicemail_calls
+        
+        voicemail_rate = (voicemail_calls / total_calls * 100) if total_calls > 0 else 0
+        avg_confidence = sum(row.avg_confidence * row.count for row in analytics_data if row.avg_confidence) / total_calls if total_calls > 0 else 0
+        
+        return {
+            "period_days": days,
+            "total_calls": total_calls,
+            "voicemail_calls": voicemail_calls,
+            "human_calls": human_calls,
+            "voicemail_rate_percent": round(voicemail_rate, 2),
+            "average_detection_confidence": round(avg_confidence, 3),
+            "breakdown": [
+                {
+                    "disposition": row.disposition.value if row.disposition else "unknown",
+                    "count": row.count,
+                    "percentage": round(row.count / total_calls * 100, 2) if total_calls > 0 else 0,
+                    "avg_confidence": round(row.avg_confidence, 3) if row.avg_confidence else None,
+                    "messages_left": row.messages_left or 0
+                }
+                for row in analytics_data
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error getting voicemail analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/training/start", tags=["AI Training"])
 async def start_training_endpoint():

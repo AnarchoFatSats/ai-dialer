@@ -12,6 +12,7 @@ from sqlalchemy import select, update
 from app.config import settings
 from app.database import get_db
 from app.models import Campaign, Lead, CallLog
+from app.services.voicemail_detection import voicemail_detection_service, VoicemailState
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ class AIConversationEngine:
             self,
             call_log_id: int,
             audio_data: bytes) -> Optional[bytes]:
-        """Process incoming audio chunk and generate response"""
+        """Process incoming audio chunk and generate response with voicemail detection"""
         try:
             if call_log_id not in self.active_conversations:
                 logger.warning(
@@ -143,10 +144,39 @@ class AIConversationEngine:
             # Transcribe audio using Deepgram
             transcript = await self._transcribe_audio(audio_data)
 
-            if not transcript or len(transcript.strip()) < 3:
-                return None  # No meaningful speech detected
+            # Perform voicemail detection analysis
+            voicemail_result = await voicemail_detection_service.analyze_audio_chunk(
+                call_log_id, audio_data, transcript
+            )
 
-            # Add to conversation history
+            # Handle voicemail detection results
+            if voicemail_result.state == VoicemailState.VOICEMAIL_DETECTED:
+                logger.info(f"Voicemail detected for call {call_log_id} - waiting for beep")
+                # Don't respond yet, wait for beep
+                return None
+            
+            elif voicemail_result.state == VoicemailState.BEEP_DETECTED:
+                logger.info(f"Voicemail beep detected for call {call_log_id} - leaving message")
+                # Generate voicemail message
+                ai_response = await self._generate_voicemail_message(context)
+                
+                # Add to conversation history
+                context.conversation_history.append({
+                    "role": "assistant", 
+                    "content": f"[VOICEMAIL MESSAGE] {ai_response}",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                
+                # Convert to speech and return
+                audio_response = await self._text_to_speech(ai_response)
+                await self._log_conversation_turn(call_log_id, "[BEEP DETECTED]", ai_response)
+                return audio_response
+
+            # If no meaningful speech detected and not voicemail, continue analyzing
+            if not transcript or len(transcript.strip()) < 3:
+                return None
+
+            # Add to conversation history (only if human detected or analyzing)
             context.lead_responses.append(transcript)
             context.conversation_history.append({
                 "role": "user",
@@ -154,7 +184,7 @@ class AIConversationEngine:
                 "timestamp": datetime.utcnow().isoformat()
             })
 
-            # Generate AI response
+            # Generate AI response for human conversation
             ai_response = await self._generate_ai_response(context, transcript)
 
             if ai_response:
@@ -731,6 +761,67 @@ Sentiment Score: {context.sentiment_score}
 
         except Exception as e:
             logger.error(f"Error handling transfer success: {e}")
+
+    async def _generate_voicemail_message(self, context: ConversationContext) -> str:
+        """Generate appropriate voicemail message based on campaign and lead info"""
+        try:
+            # Get campaign and lead data for voicemail customization
+            async with get_db() as db:
+                campaign_query = select(Campaign).where(
+                    Campaign.id == context.campaign_id)
+                campaign = await db.execute(campaign_query)
+                campaign = campaign.scalar_one_or_none()
+
+                lead_query = select(Lead).where(Lead.id == context.lead_id)
+                lead = await db.execute(lead_query)
+                lead = lead.scalar_one_or_none()
+
+            # Get voicemail template from voicemail detection service
+            campaign_info = {
+                'company_name': campaign.name if campaign else 'Our Company',
+                'offer_description': campaign.description if campaign else 'an important opportunity',
+                'callback_number': '1-800-CALLBACK',  # Configure this based on your needs
+                'lead_name': f"{lead.first_name}" if lead and lead.first_name else "there"
+            }
+
+            # Use voicemail detection service to generate message
+            voicemail_message = await voicemail_detection_service.get_voicemail_message_template(
+                context.call_log_id, campaign_info
+            )
+
+            # Optionally use Claude to personalize the message further
+            if self.anthropic_client and campaign and lead:
+                personalization_prompt = f"""
+                Personalize this voicemail message for {lead.first_name or 'the recipient'}:
+                
+                Base message: {voicemail_message}
+                
+                Campaign: {campaign.name}
+                Lead info: {lead.first_name} {lead.last_name}
+                
+                Make it sound natural and personalized, but keep it under 30 seconds when spoken.
+                Keep the same structure but add personal touches.
+                """
+                
+                try:
+                    response = await self.anthropic_client.messages.create(
+                        model="claude-3-haiku-20240307",
+                        max_tokens=200,
+                        temperature=0.7,
+                        messages=[{"role": "user", "content": personalization_prompt}]
+                    )
+                    personalized_message = response.content[0].text.strip()
+                    return personalized_message
+                except Exception as e:
+                    logger.warning(f"Failed to personalize voicemail message: {e}")
+
+            return voicemail_message
+
+        except Exception as e:
+            logger.error(f"Error generating voicemail message: {e}")
+            # Fallback message
+            return """Hi, this is an automated message. We tried to reach you about an important opportunity. 
+            Please call us back when you have a moment. Thank you and have a great day!"""
 
 
 # Global instance
