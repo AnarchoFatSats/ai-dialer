@@ -335,6 +335,12 @@ class CallLog(Base):
     intent_classification = Column(String(100))
     keywords_detected = Column(ARRAY(String))
 
+    # Voicemail Detection
+    voicemail_detection_confidence = Column(Float)
+    detection_metadata = Column(JSON)
+    voicemail_message_left = Column(Boolean, default=False)
+    beep_detected_at = Column(DateTime)
+
     # Relationships
     campaign = relationship("Campaign", back_populates="call_logs")
     lead = relationship("Lead", back_populates="call_logs")
