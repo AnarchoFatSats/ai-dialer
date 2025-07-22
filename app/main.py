@@ -13,7 +13,6 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,10 +24,9 @@ import uvicorn
 from app.config import settings
 from app.database import get_db, AsyncSessionLocal
 from app.models import *
-from sqlalchemy import select, func, and_, select, text, update, or_, delete
+from sqlalchemy import select, func, and_, text, update, or_, delete
 import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
-from uuid import UUID
 from app.services.guided_training import (
     guided_training_service, BusinessObjective, BrandPersonality, 
     IndustryType, SalesStyle, GeneratedCampaign
@@ -248,7 +246,7 @@ async def admin_dashboard(request: Request):
 
 
 @app.post("/campaigns", tags=["Campaign Management"])
-async def create_campaign(campaign_data: dict):
+async def create_campaign(campaign_data: CampaignCreate):
     """Create a new campaign with optimization features. Enhanced with guided training capability."""
     try:
         # Create demo campaign response for Lambda
@@ -257,12 +255,12 @@ async def create_campaign(campaign_data: dict):
         return {
             "success": True,
             "campaign_id": campaign_id,
-            "name": campaign_data.get("name", "New Campaign"),
+            "name": campaign_data.name,
             "status": "draft",
             "created_at": datetime.now().isoformat(),
-            "guided_training": campaign_data.get("guided_training", False),
-            "script_template": campaign_data.get("script_template", "Hello, how are you today?"),
-            "max_concurrent_calls": campaign_data.get("max_concurrent_calls", 5)
+            "guided_training": campaign_data.guided_training or False,
+            "script_template": campaign_data.script_template,
+            "max_concurrent_calls": campaign_data.max_concurrent_calls or 5
         }
     except Exception as e:
         logger.error(f"Error creating campaign: {e}")
@@ -353,31 +351,18 @@ async def get_campaign_performance(
 
 @app.get("/campaigns", tags=["Campaign Management"])
 async def list_campaigns(
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
 ):
     """List campaigns with optional status filter."""
     try:
-        # Return demo data for Lambda without database
-        campaigns = [
-            {
-                "id": "demo-campaign-1",
-                "name": "Solar Lead Generation",
-                "status": "active",
-                "total_leads": 150,
-                "calls_made": 45,
-                "transfers": 8,
-                "created_at": "2025-07-16T10:00:00Z"
-            },
-            {
-                "id": "demo-campaign-2", 
-                "name": "Real Estate Outreach",
-                "status": "paused",
-                "total_leads": 200,
-                "calls_made": 120,
-                "transfers": 15,
-                "created_at": "2025-07-15T14:30:00Z"
-            }
-        ]
+        # Query campaigns from database
+        query = select(Campaign)
+        if status:
+            query = query.where(Campaign.status == status)
+        
+        result = await db.execute(query)
+        campaigns = result.scalars().all()
 
         return {
             "campaigns": [
@@ -385,9 +370,9 @@ async def list_campaigns(
                     "id": str(campaign.id),
                     "name": campaign.name,
                     "status": campaign.status.value,
-                    "total_leads": campaign.total_leads,
-                    "total_cost": campaign.total_cost,
-                    "created_at": campaign.created_at.isoformat()
+                    "total_leads": campaign.total_leads or 0,
+                    "total_cost": campaign.total_cost or 0.0,
+                    "created_at": campaign.created_at.isoformat() if campaign.created_at else None
                 }
                 for campaign in campaigns
             ]

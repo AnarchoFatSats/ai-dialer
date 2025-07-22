@@ -3,15 +3,26 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "=== Using absolute paths approach ==="
+        - echo "=== AI Dialer Production Build ==="
         - pwd
         - ls -la
+        - echo "=== Setting Production Environment ==="
+        - export NODE_ENV=production
+        - export REACT_APP_ENVIRONMENT=production
+        - export REACT_APP_BACKEND_API_URL=http://35.173.203.155:8000
+        - export REACT_APP_ENABLE_REAL_TIME_UPDATES=true
+        - export REACT_APP_ENABLE_NOTIFICATIONS=true
+        - export REACT_APP_ENABLE_ANALYTICS=true
+        - export REACT_APP_DEBUG_MODE=false
+        - export REACT_APP_USE_MOCK_DATA=false
+        - export GENERATE_SOURCEMAP=false
         - echo "=== Installing dependencies with absolute path ==="
         - cd /codebuild/output/src*/src/ai-dialer/amplify_ui && npm ci
     build:
       commands:
         - echo "=== Building with absolute path ==="
         - cd /codebuild/output/src*/src/ai-dialer/amplify_ui && pwd && ls -la && npm run build
+        - echo "=== Build Complete - Production Ready ==="
   artifacts:
     baseDirectory: amplify_ui/build
     files:
