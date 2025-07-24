@@ -193,10 +193,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global OPTIONS handler for CORS preflight
+@app.options("/{path:path}", tags=["CORS"])
+async def options_handler(path: str):
+    """Handle CORS preflight requests for all paths."""
+    return {"message": "OK"}
+
 # Health check endpoint
 
 
 @app.get("/health", tags=["System"])
+@app.options("/health", tags=["System"])
 async def health_check():
     """Health check endpoint with AWS service status."""
     health_status = {
