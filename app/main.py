@@ -173,7 +173,8 @@ app = FastAPI(
     title="AI Dialer - Conversational Voice Platform",
     description="Enterprise-grade AI voice dialer with conversational training",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    root_path="/api"
 )
 
 # Initialize templates (lazy loading to avoid import issues)
