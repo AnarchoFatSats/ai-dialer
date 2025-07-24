@@ -6,24 +6,24 @@ frontend:
         - echo "=== AI Dialer Production Build ==="
         - pwd
         - ls -la
+        - echo "=== Checking amplify_ui directory ==="
+        - ls -la amplify_ui/
         - echo "=== Setting Production Environment ==="
         - export NODE_ENV=production
         - export REACT_APP_ENVIRONMENT=production
         - export REACT_APP_BACKEND_API_URL=https://intelareach.com
         - export REACT_APP_WS_URL=wss://intelareach.com/ws/dashboard
-        - export REACT_APP_ENABLE_REAL_TIME_UPDATES=true
-        - export REACT_APP_ENABLE_NOTIFICATIONS=true
-        - export REACT_APP_ENABLE_ANALYTICS=true
         - export REACT_APP_DEBUG_MODE=false
-        - export REACT_APP_USE_MOCK_DATA=false
         - export GENERATE_SOURCEMAP=false
-        - echo "=== Installing dependencies with absolute path ==="
-        - cd amplify_ui && npm ci
+        - export REACT_APP_USE_MOCK_DATA=false
+        - echo "=== Installing dependencies ==="
+        - npm ci --prefix amplify_ui
     build:
       commands:
-        - echo "=== Building with absolute path ==="
-        - cd amplify_ui && pwd && ls -la && npm run build
+        - echo "=== Building production app ==="
+        - npm run build --prefix amplify_ui
         - echo "=== Build Complete - Production Ready ==="
+        - ls -la amplify_ui/build/
   artifacts:
     baseDirectory: amplify_ui/build
     files:
