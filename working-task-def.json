@@ -1,0 +1,29 @@
+{
+  "family": "ai-dialer-task-fixed",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::337909762852:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "ai-dialer-container",
+      "image": "337909762852.dkr.ecr.us-east-1.amazonaws.com/ai-dialer:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ai-dialer",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+} 

@@ -5,7 +5,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 import anthropic
-from deepgram import Deepgram
+import openai
 import elevenlabs
 from sqlalchemy import select, update
 
@@ -45,7 +45,7 @@ class AIConversationEngine:
     def __init__(self):
         # Initialize clients only if API keys are valid (not placeholder values)
         self.anthropic_client = None
-        self.deepgram_client = None
+        self.openai_client = None
         self.elevenlabs_client = None
 
         try:
@@ -58,12 +58,12 @@ class AIConversationEngine:
             logger.warning(f"Failed to initialize Anthropic client: {e}")
 
         try:
-            if (settings.DEEPGRAM_API_KEY and 
-                not settings.DEEPGRAM_API_KEY.startswith('placeholder-') and
-                not settings.DEEPGRAM_API_KEY.startswith('your_')):
-                self.deepgram_client = Deepgram(settings.DEEPGRAM_API_KEY)
+            if (settings.OPENAI_API_KEY and 
+                not settings.OPENAI_API_KEY.startswith('placeholder-') and
+                not settings.OPENAI_API_KEY.startswith('your_')):
+                self.openai_client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         except Exception as e:
-            logger.warning(f"Failed to initialize Deepgram client: {e}")
+            logger.warning(f"Failed to initialize OpenAI client: {e}")
 
         try:
             if (settings.ELEVENLABS_API_KEY and 
@@ -141,7 +141,7 @@ class AIConversationEngine:
 
             context = self.active_conversations[call_log_id]
 
-            # Transcribe audio using Deepgram
+            # Transcribe audio using OpenAI Whisper
             transcript = await self._transcribe_audio(audio_data)
 
             # Perform voicemail detection analysis
@@ -208,50 +208,35 @@ class AIConversationEngine:
             return None
 
     async def _transcribe_audio(self, audio_data: bytes) -> Optional[str]:
-        """Transcribe audio using Deepgram"""
+        """Transcribe audio using OpenAI Whisper"""
         try:
-            if not self.deepgram_client:
+            if not self.openai_client:
                 logger.warning(
-                    "Deepgram client not initialized - returning mock transcript")
+                    "OpenAI client not initialized - returning mock transcript")
                 return "Hello, I understand you're speaking but speech recognition is not configured."
 
-            # Configure Deepgram options
-            options = {
-                'model': 'nova-2',
-                'language': 'en-US',
-                'punctuate': True,
-                'diarize': False,
-                'utterances': True,
-                'interim_results': False
-            }
+            # Convert audio data to a format OpenAI can handle
+            import io
+            audio_file = io.BytesIO(audio_data)
+            audio_file.name = "audio.wav"  # OpenAI needs a filename
 
-            # Create audio source
-            audio_source = {
-                'buffer': audio_data,
-                'mimetype': 'audio/mulaw'
-            }
-
-            # Transcribe
-            response = await self.deepgram_client.transcription.prerecorded(
-                audio_source, options
+            # Transcribe using OpenAI Whisper
+            response = await self.openai_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="en"
             )
 
-            if response and 'results' in response:
-                channels = response['results']['channels']
-                if channels and len(channels) > 0:
-                    alternatives = channels[0]['alternatives']
-                    if alternatives and len(alternatives) > 0:
-                        transcript = alternatives[0]['transcript']
-                        confidence = alternatives[0]['confidence']
-
-                        # Only return if confidence is high enough
-                        if confidence > 0.7:
-                            return transcript.strip()
+            if response and response.text:
+                transcript = response.text.strip()
+                # OpenAI Whisper is generally high quality, return if not empty
+                if len(transcript) > 0:
+                    return transcript
 
             return None
 
         except Exception as e:
-            logger.error(f"Error transcribing audio: {e}")
+            logger.error(f"Error transcribing audio with OpenAI Whisper: {e}")
             return None
 
     async def _generate_ai_response(

@@ -269,7 +269,7 @@ class AWSConnectMediaHandler:
     async def _process_with_ai(self, call_log_id: int, audio_data: bytes):
         """Process audio data with AI conversation engine"""
         try:
-            # Convert audio to text using Deepgram
+            # Convert audio to text using OpenAI Whisper
             transcript = await ai_conversation_engine._speech_to_text(audio_data)
 
             if transcript and transcript.strip():
