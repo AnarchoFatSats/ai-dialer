@@ -10,7 +10,6 @@ import {
   Container,
   Grid,
   Card,
-  CardContent,
   IconButton,
   Badge,
   Drawer,
@@ -19,9 +18,6 @@ import {
   ListItemIcon,
   ListItemText,
   Avatar,
-  Chip,
-  LinearProgress,
-  Button,
   Fab
 } from '@mui/material';
 import {
@@ -29,21 +25,13 @@ import {
   Phone,
   Analytics,
   Settings,
-  AccountBalance,
-  TrendingUp,
   Notifications,
   PowerSettingsNew,
-  Speed,
   AttachMoney,
   Groups,
-  Assessment,
-  Security,
   VolumeUp,
-  Star,
   PanTool,
-      MonetizationOn,
-    Timeline,
-    Psychology
+  Psychology
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
@@ -425,7 +413,11 @@ function App() {
         >
           {/* Top Bar */}
           <AppBar position="static" elevation={0}>
-            <Toolbar sx={{ justifyContent: 'space-between' }}>
+            <Toolbar sx={{ 
+              justifyContent: 'space-between',
+              px: 3, // Add horizontal padding to prevent cutoff
+              py: 1  // Add vertical padding for better spacing
+            }}>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <IconButton
                   color="inherit"
@@ -439,7 +431,12 @@ function App() {
                 </Typography>
               </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 2,
+                pr: 1 // Add right padding to ensure elements don't get cut off
+              }}>
                 {/* Revenue Display */}
                 <motion.div
                   animate={{ 
@@ -464,7 +461,7 @@ function App() {
                   </Card>
                 </motion.div>
 
-                <IconButton color="inherit">
+                <IconButton color="inherit" sx={{ p: 1 }}>
                   <Badge badgeContent={4} color="error">
                     <Notifications />
                   </Badge>
@@ -473,7 +470,10 @@ function App() {
                 <Avatar sx={{ 
                   backgroundColor: 'primary.main',
                   color: 'black',
-                  fontWeight: 700
+                  fontWeight: 700,
+                  width: 40,
+                  height: 40,
+                  mr: 1 // Add margin right to prevent cutoff
                 }}>
                   AI
                 </Avatar>
