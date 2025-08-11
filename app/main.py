@@ -238,6 +238,18 @@ async def health_check():
     
     return health_status
 
+# Compatibility endpoint for CloudFront path routing
+@app.get("/api/health", tags=["System"])
+@app.options("/api/health", tags=["System"])
+async def health_check_api_prefixed():
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+@app.get("/live", tags=["System"])
+@app.options("/live", tags=["System"])
+async def liveness_check():
+    """Fast liveness probe that avoids external dependencies."""
+    return {"status": "ok"}
+
 # Admin Dashboard
 
 
