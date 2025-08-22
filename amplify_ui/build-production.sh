@@ -8,8 +8,8 @@ echo "================================================"
 # Set production environment variables
 export NODE_ENV=production
 export REACT_APP_ENVIRONMENT=production
-export REACT_APP_BACKEND_API_URL=http://35.173.203.155:8000
-export REACT_APP_WS_BASE_URL=ws://35.173.203.155:8000
+export REACT_APP_BACKEND_API_URL=http://ai-dialer-alb-959576006.us-east-1.elb.amazonaws.com
+export REACT_APP_WS_BASE_URL=ws://ai-dialer-alb-959576006.us-east-1.elb.amazonaws.com
 export REACT_APP_ENABLE_REAL_TIME_UPDATES=true
 export REACT_APP_ENABLE_NOTIFICATIONS=true
 export REACT_APP_ENABLE_ANALYTICS=true

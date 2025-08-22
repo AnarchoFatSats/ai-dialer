@@ -5,13 +5,13 @@ const config = {
   // Development: Falls back to localhost
   API_BASE_URL: process.env.REACT_APP_BACKEND_API_URL || 
     (process.env.NODE_ENV === 'production' 
-      ? 'http://35.173.203.155:8000' // Fallback: Current active ECS IP
+      ? 'http://ai-dialer-alb-959576006.us-east-1.elb.amazonaws.com' // ALB endpoint
       : 'http://localhost:8000'),
   
   // WebSocket URL for real-time features
   WS_BASE_URL: process.env.REACT_APP_WS_BASE_URL || 
     (process.env.NODE_ENV === 'production'
-      ? 'ws://35.173.203.155:8000'
+      ? 'ws://ai-dialer-alb-959576006.us-east-1.elb.amazonaws.com'
       : 'ws://localhost:8000'),
   
   // AWS Configuration
