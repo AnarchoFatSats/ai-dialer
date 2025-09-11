@@ -57,7 +57,7 @@ class APIService {
   // Campaign Management
   async createCampaign(campaignData) {
     try {
-      const response = await api.post('/campaigns', campaignData);
+      const response = await api.post('/api/campaigns', campaignData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to create campaign: ${error.response?.data?.detail || error.message}`);
@@ -67,7 +67,7 @@ class APIService {
   async getCampaigns(status = null) {
     try {
       const params = status ? { status } : {};
-      const response = await api.get('/campaigns', { params });
+      const response = await api.get('/api/campaigns', { params });
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch campaigns: ${error.response?.data?.detail || error.message}`);
@@ -76,7 +76,7 @@ class APIService {
 
   async startCampaign(campaignId) {
     try {
-      const response = await api.post(`/campaigns/${campaignId}/start`);
+      const response = await api.post(`/api/campaigns/${campaignId}/start`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to start campaign: ${error.response?.data?.detail || error.message}`);
@@ -86,7 +86,7 @@ class APIService {
   async pauseCampaign(campaignId, reason = null) {
     try {
       const data = reason ? { reason } : {};
-      const response = await api.post(`/campaigns/${campaignId}/pause`, data);
+      const response = await api.post(`/api/campaigns/${campaignId}/pause`, data);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to pause campaign: ${error.response?.data?.detail || error.message}`);
@@ -95,7 +95,7 @@ class APIService {
 
   async getCampaignPerformance(campaignId) {
     try {
-      const response = await api.get(`/campaigns/${campaignId}/performance`);
+      const response = await api.get(`/api/campaigns/${campaignId}/performance`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch campaign performance: ${error.response?.data?.detail || error.message}`);
@@ -105,7 +105,7 @@ class APIService {
   // Analytics
   async getDashboardData() {
     try {
-      const response = await api.get('/analytics/dashboard');
+      const response = await api.get('/api/analytics/dashboard');
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch dashboard data: ${error.response?.data?.detail || error.message}`);
@@ -144,7 +144,7 @@ class APIService {
   // Call Management
   async initiateCall(callData) {
     try {
-      const response = await api.post('/calls/initiate', callData);
+      const response = await api.post('/api/calls/initiate', callData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to initiate call: ${error.response?.data?.detail || error.message}`);
@@ -153,7 +153,7 @@ class APIService {
 
   async transferCall(callLogId, transferNumber) {
     try {
-      const response = await api.post('/calls/transfer', {
+      const response = await api.post('/api/calls/transfer', {
         call_log_id: callLogId,
         transfer_number: transferNumber
       });
@@ -165,7 +165,7 @@ class APIService {
 
   async getActiveCalls() {
     try {
-      const response = await api.get('/calls/active');
+      const response = await api.get('/api/calls/active');
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch active calls: ${error.response?.data?.detail || error.message}`);
@@ -174,7 +174,7 @@ class APIService {
 
   async getQueueStatus() {
     try {
-      const response = await api.get('/calls/queue-status');
+      const response = await api.get('/api/calls/queue-status');
       return response.data;
     } catch (error) {
       throw new Error(`Failed to fetch queue status: ${error.response?.data?.detail || error.message}`);
@@ -214,7 +214,7 @@ class APIService {
   // DID Management
   async initializeDIDPool(didRequest) {
     try {
-      const response = await api.post('/did/initialize', didRequest);
+      const response = await api.post('/api/did/initialize', didRequest);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to initialize DID pool: ${error.response?.data?.detail || error.message}`);
@@ -279,7 +279,7 @@ class APIService {
   // Lead Management
   async uploadLeads(campaignId, leads) {
     try {
-      const response = await api.post(`/campaigns/${campaignId}/leads`, { leads });
+      const response = await api.post(`/api/campaigns/${campaignId}/leads`, { leads });
       return response.data;
     } catch (error) {
       throw new Error(`Failed to upload leads: ${error.response?.data?.detail || error.message}`);
@@ -292,7 +292,7 @@ class APIService {
       formData.append('file', csvFile);
       formData.append('campaign_id', campaignId);
       
-      const response = await api.post(`/campaigns/${campaignId}/leads/csv`, formData, {
+      const response = await api.post(`/api/campaigns/${campaignId}/leads/csv`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -337,7 +337,7 @@ class APIService {
 
   async continueConversationalTraining(sessionId, message) {
     try {
-      const response = await api.post('/conversational-training/continue', {
+      const response = await api.post('/api/conversational-training/continue', {
         session_id: sessionId,
         message: message
       });
@@ -359,7 +359,7 @@ class APIService {
 
   async startTraining(trainingConfig) {
     try {
-      const response = await api.post('/training/start', trainingConfig);
+      const response = await api.post('/api/training/start', trainingConfig);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to start training: ${error.response?.data?.detail || error.message}`);
