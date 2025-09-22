@@ -1,0 +1,184 @@
+{
+  "Id": "E18T1GWXZ5K5W0",
+  "DistributionConfig": {
+    "CallerReference": "ai-dialer-cloudfront-1724288435",
+    "Aliases": {
+      "Quantity": 1,
+      "Items": ["intelareach.com"]
+    },
+    "DefaultRootObject": "index.html",
+    "Comment": "AI Dialer unified domain distribution",
+    "Enabled": true,
+    "Origins": {
+      "Quantity": 2,
+      "Items": [
+        {
+          "Id": "amplify-frontend",
+          "DomainName": "main.dwrcfhzub1d6l.amplifyapp.com",
+          "OriginPath": "",
+          "CustomHeaders": {
+            "Quantity": 1,
+            "Items": [
+              {
+                "HeaderName": "Host",
+                "HeaderValue": "main.dwrcfhzub1d6l.amplifyapp.com"
+              }
+            ]
+          },
+          "CustomOriginConfig": {
+            "HTTPPort": 443,
+            "HTTPSPort": 443,
+            "OriginProtocolPolicy": "https-only",
+            "OriginSslProtocols": {
+              "Quantity": 1,
+              "Items": ["TLSv1.2"]
+            },
+            "OriginReadTimeout": 30,
+            "OriginKeepaliveTimeout": 5
+          },
+          "ConnectionAttempts": 3,
+          "ConnectionTimeout": 10,
+          "OriginShield": {
+            "Enabled": false
+          },
+          "OriginAccessControlId": ""
+        },
+        {
+          "Id": "alb-backend",
+          "DomainName": "ai-dialer-alb-959576006.us-east-1.elb.amazonaws.com",
+          "OriginPath": "",
+          "CustomHeaders": {
+            "Quantity": 0
+          },
+          "CustomOriginConfig": {
+            "HTTPPort": 80,
+            "HTTPSPort": 443,
+            "OriginProtocolPolicy": "http-only",
+            "OriginSslProtocols": {
+              "Quantity": 1,
+              "Items": ["TLSv1.2"]
+            },
+            "OriginReadTimeout": 30,
+            "OriginKeepaliveTimeout": 5
+          },
+          "ConnectionAttempts": 3,
+          "ConnectionTimeout": 10,
+          "OriginShield": {
+            "Enabled": false
+          },
+          "OriginAccessControlId": ""
+        }
+      ]
+    },
+    "DefaultCacheBehavior": {
+      "TargetOriginId": "amplify-frontend",
+      "ViewerProtocolPolicy": "redirect-to-https",
+      "TrustedSigners": {
+        "Enabled": false,
+        "Quantity": 0
+      },
+      "TrustedKeyGroups": {
+        "Enabled": false,
+        "Quantity": 0
+      },
+      "ForwardedValues": {
+        "QueryString": false,
+        "Cookies": {
+          "Forward": "none"
+        },
+        "Headers": {
+          "Quantity": 0
+        }
+      },
+      "MinTTL": 0,
+      "DefaultTTL": 86400,
+      "MaxTTL": 31536000,
+      "Compress": true,
+      "LambdaFunctionAssociations": {
+        "Quantity": 0
+      },
+      "FunctionAssociations": {
+        "Quantity": 0
+      },
+      "FieldLevelEncryptionId": "",
+      "RealtimeLogConfigArn": "",
+      "CachePolicyId": "",
+      "OriginRequestPolicyId": "",
+      "ResponseHeadersPolicyId": "",
+      "SmoothStreaming": false
+    },
+    "CacheBehaviors": {
+      "Quantity": 1,
+      "Items": [
+        {
+          "PathPattern": "/api/*",
+          "TargetOriginId": "alb-backend",
+          "ViewerProtocolPolicy": "redirect-to-https",
+          "TrustedSigners": {
+            "Enabled": false,
+            "Quantity": 0
+          },
+          "TrustedKeyGroups": {
+            "Enabled": false,
+            "Quantity": 0
+          },
+          "ForwardedValues": {
+            "QueryString": true,
+            "Cookies": {
+              "Forward": "all"
+            },
+            "Headers": {
+              "Quantity": 1,
+              "Items": ["*"]
+            }
+          },
+          "MinTTL": 0,
+          "DefaultTTL": 0,
+          "MaxTTL": 0,
+          "Compress": true,
+          "LambdaFunctionAssociations": {
+            "Quantity": 0
+          },
+          "FunctionAssociations": {
+            "Quantity": 0
+          },
+          "FieldLevelEncryptionId": "",
+          "RealtimeLogConfigArn": "",
+          "CachePolicyId": "",
+          "OriginRequestPolicyId": "",
+          "ResponseHeadersPolicyId": "",
+          "SmoothStreaming": false
+        }
+      ]
+    },
+    "CustomErrorPages": {
+      "Quantity": 0
+    },
+    "Logging": {
+      "Enabled": false,
+      "IncludeCookies": false,
+      "Bucket": "",
+      "Prefix": ""
+    },
+    "PriceClass": "PriceClass_All",
+    "ViewerCertificate": {
+      "ACMCertificateArn": "arn:aws:acm:us-east-1:337909762852:certificate/4d4b0c8c-8b5b-4e6a-9c2d-1f3e5a7b9c0d",
+      "SSLSupportMethod": "sni-only",
+      "MinimumProtocolVersion": "TLSv1.2_2021",
+      "Certificate": "arn:aws:acm:us-east-1:337909762852:certificate/4d4b0c8c-8b5b-4e6a-9c2d-1f3e5a7b9c0d",
+      "CertificateSource": "acm"
+    },
+    "Restrictions": {
+      "GeoRestriction": {
+        "RestrictionType": "none",
+        "Quantity": 0
+      }
+    },
+    "WebACLId": "",
+    "HttpVersion": "http2",
+    "IsIPV6Enabled": true,
+    "ContinuousDeploymentPolicyId": "",
+    "Staging": false
+  }
+}
+

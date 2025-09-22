@@ -1,0 +1,11 @@
+{
+  "Changes": [{
+    "Action": "CREATE",
+    "ResourceRecordSet": {
+      "Name": "_c1a2a8ec0600c370b1748ce24f5571d8.intelareach.com",
+      "Type": "CNAME",
+      "TTL": 300,
+      "ResourceRecords": [{"Value": "_7dbbb303ab6ffc8ab3a2504a90587537.xlfgrmvvlj.acm-validations.aws."}]
+    }
+  }]
+}
