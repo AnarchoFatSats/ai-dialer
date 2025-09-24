@@ -1,0 +1,11 @@
+{
+  "answer_rate": 13.508992376743494,
+  "transfer_rate": 12.413381966355516,
+  "ai_response_time_p95": 559.6501865970828,
+  "cost_per_transfer": 0.11565435959182464,
+  "generated_at": "2025-09-24T11:55:56.393668",
+  "data_quality": "synthetic",
+  "version": "1.0",
+  "source": "synthetic_generator",
+  "environment": "development"
+}
